@@ -42,6 +42,7 @@ exit
 
 ### Step 2: Clone and Deploy
 
+**Option A: Use Pre-built Docker Image (Recommended)**
 ```bash
 # Clone repository
 git clone https://github.com/amiklosi/appgrid-backend.git
@@ -50,6 +51,23 @@ cd appgrid-backend
 # Copy and configure environment
 cp .env.production .env
 nano .env  # Edit with your values
+
+# Deploy with production compose (uses pre-built image)
+./scripts/deploy.sh
+```
+
+**Option B: Build Your Own Image**
+```bash
+# Clone repository
+git clone https://github.com/amiklosi/appgrid-backend.git
+cd appgrid-backend
+
+# Build and push Docker image
+./scripts/build-image.sh --push
+
+# Copy and configure environment
+cp .env.production .env
+nano .env
 
 # Deploy with production compose
 ./scripts/deploy.sh
@@ -68,6 +86,46 @@ Recommended server directory structure:
 ├── ssl/                      # SSL certificates
 └── nginx/                    # Reverse proxy config
 ```
+
+## 🐳 Docker Image Management
+
+### Building the Image
+
+```bash
+# Build locally
+./scripts/build-image.sh
+
+# Build and push to GitHub Container Registry
+./scripts/build-image.sh --push
+
+# Build with custom tag
+./scripts/build-image.sh --tag v1.0 --push
+```
+
+### GitHub Container Registry Setup
+
+To push images to GitHub Container Registry:
+
+```bash
+# Create GitHub Personal Access Token with packages:write scope
+# https://github.com/settings/tokens
+
+# Login to GitHub Container Registry
+export GITHUB_TOKEN=your_token_here
+echo $GITHUB_TOKEN | docker login ghcr.io -u amiklosi --password-stdin
+
+# Build and push
+./scripts/build-image.sh --push
+```
+
+### Using Pre-built Image
+
+The production docker-compose file uses:
+```yaml
+image: ghcr.io/amiklosi/appgrid-backend:latest
+```
+
+This means you don't need to build locally - just pull and run!
 
 ## 🔧 Detailed Setup
 
