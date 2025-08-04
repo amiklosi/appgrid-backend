@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  app:
+    image: ghcr.io/amiklosi/appgrid-backend:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://appgrid_user:${POSTGRES_PASSWORD}@db:5432/appgrid_db
+      - REVENUECAT_AUTH_TOKEN=${REVENUECAT_AUTH_TOKEN}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - appgrid-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=appgrid_db
+      - POSTGRES_USER=appgrid_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    networks:
+      - appgrid-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appgrid_user -d appgrid_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  adminer:
+    image: adminer:4-standalone
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=db
+      - ADMINER_DESIGN=nette
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - appgrid-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  appgrid-network:
+    driver: bridge

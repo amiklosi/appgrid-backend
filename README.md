@@ -137,7 +137,17 @@ Environment variables:
 - Input validation and error handling
 - Database transactions for data integrity
 
-## Docker Commands
+## Production Deployment
+
+### Portainer Stack Deployment
+
+Deploy to production using Portainer:
+
+1. **See full guide:** [PORTAINER_DEPLOYMENT.md](./PORTAINER_DEPLOYMENT.md)
+2. **Quick setup:** Use `docker-compose.prod.yml` in Portainer
+3. **Environment variables:** Set `POSTGRES_PASSWORD` and `REVENUECAT_AUTH_TOKEN`
+
+### Docker Commands (Development)
 
 ```bash
 # Start everything
@@ -157,4 +167,14 @@ docker-compose down -v
 
 # Rebuild only the app
 docker-compose up --build app
+```
+
+### Production Commands
+
+```bash
+# Production build
+docker build -t ghcr.io/amiklosi/appgrid-backend:latest .
+
+# Production deployment
+docker-compose -f docker-compose.prod.yml up -d
 ```
