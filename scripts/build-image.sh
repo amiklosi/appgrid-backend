@@ -87,16 +87,75 @@ fi
 print_status "Building Docker image..."
 print_status "Image: ${FULL_IMAGE_NAME}:${TAG}"
 
+# Detect platform and build accordingly
+PLATFORM=$(uname -m)
+if [ "$PLATFORM" = "arm64" ] || [ "$PLATFORM" = "aarch64" ]; then
+    print_warning "Detected ARM64 architecture - building multi-platform image for server compatibility"
+    PLATFORMS="linux/amd64,linux/arm64"
+    USE_BUILDX=true
+else
+    print_status "Detected AMD64 architecture - building single platform image"
+    PLATFORMS="linux/amd64"
+    USE_BUILDX=false
+fi
+
 # Build with BuildKit for better performance
 export DOCKER_BUILDKIT=1
 
-docker build \
-    --tag "${FULL_IMAGE_NAME}:${TAG}" \
-    --tag "${FULL_IMAGE_NAME}:latest" \
-    --label "org.opencontainers.image.source=https://github.com/${USERNAME}/${IMAGE_NAME}" \
-    --label "org.opencontainers.image.description=AppGrid Backend - RevenueCat webhook server" \
-    --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-    .
+if [ "$USE_BUILDX" = true ]; then
+    # Multi-platform build with buildx
+    print_status "Using docker buildx for multi-platform build..."
+    
+    # Create buildx builder if it doesn't exist
+    if ! docker buildx inspect multiplatform >/dev/null 2>&1; then
+        print_status "Creating buildx builder..."
+        docker buildx create --name multiplatform --use
+    else
+        docker buildx use multiplatform
+    fi
+    
+    # Build for multiple platforms
+    if [ "$PUSH" = true ]; then
+        # When pushing, buildx can handle multi-platform
+        docker buildx build \
+            --platform "${PLATFORMS}" \
+            --tag "${FULL_IMAGE_NAME}:${TAG}" \
+            --tag "${FULL_IMAGE_NAME}:latest" \
+            --label "org.opencontainers.image.source=https://github.com/${USERNAME}/${IMAGE_NAME}" \
+            --label "org.opencontainers.image.description=AppGrid Backend - RevenueCat webhook server" \
+            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --push \
+            .
+        print_success "Multi-platform image built and pushed!"
+        
+        echo
+        print_success "🎉 Build and push completed successfully!"
+        echo
+        print_status "Image available at: ${FULL_IMAGE_NAME}:${TAG}"
+        print_status "Platforms: ${PLATFORMS}"
+        exit 0
+    else
+        # For local builds, build for server architecture (amd64)
+        docker buildx build \
+            --platform "linux/amd64" \
+            --tag "${FULL_IMAGE_NAME}:${TAG}" \
+            --tag "${FULL_IMAGE_NAME}:latest" \
+            --label "org.opencontainers.image.source=https://github.com/${USERNAME}/${IMAGE_NAME}" \
+            --label "org.opencontainers.image.description=AppGrid Backend - RevenueCat webhook server" \
+            --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            --load \
+            .
+    fi
+else
+    # Standard build for same architecture
+    docker build \
+        --tag "${FULL_IMAGE_NAME}:${TAG}" \
+        --tag "${FULL_IMAGE_NAME}:latest" \
+        --label "org.opencontainers.image.source=https://github.com/${USERNAME}/${IMAGE_NAME}" \
+        --label "org.opencontainers.image.description=AppGrid Backend - RevenueCat webhook server" \
+        --label "org.opencontainers.image.created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+        .
+fi
 
 print_success "Docker image built successfully!"
 

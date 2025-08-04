@@ -92,7 +92,7 @@ Recommended server directory structure:
 ### Building the Image
 
 ```bash
-# Build locally
+# Build locally (auto-detects architecture)
 ./scripts/build-image.sh
 
 # Build and push to GitHub Container Registry
@@ -101,6 +101,16 @@ Recommended server directory structure:
 # Build with custom tag
 ./scripts/build-image.sh --tag v1.0 --push
 ```
+
+**🔧 Architecture Compatibility**
+
+The build script automatically handles architecture differences:
+
+- **On Apple Silicon (M1/M2/M3):** Builds multi-platform images (AMD64 + ARM64)
+- **On Intel/AMD machines:** Builds AMD64 images
+- **For servers:** Always includes AMD64 support
+
+This prevents the `exec format error` when deploying Mac-built images to Linux servers.
 
 ### GitHub Container Registry Setup
 
