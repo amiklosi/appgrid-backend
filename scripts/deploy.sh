@@ -109,6 +109,21 @@ else
     exit 1
 fi
 
+# Verify database initialization
+print_status "Verifying database initialization..."
+sleep 5
+
+if docker-compose -f docker-compose.prod.yml exec -T db psql -U appgrid_user -d appgrid_db -c "\d" > /dev/null 2>&1; then
+    TABLE_COUNT=$(docker-compose -f docker-compose.prod.yml exec -T db psql -U appgrid_user -d appgrid_db -c "\d" 2>/dev/null | grep -c "table" || echo "0")
+    if [ "$TABLE_COUNT" -ge "5" ]; then
+        print_success "Database initialized successfully with $TABLE_COUNT tables"
+    else
+        print_warning "Database has only $TABLE_COUNT tables (expected 5+)"
+    fi
+else
+    print_error "Database connection failed during verification"
+fi
+
 # Test application health
 print_status "Testing application health..."
 sleep 5
@@ -137,5 +152,11 @@ echo "  • Stop services: docker-compose -f docker-compose.prod.yml down"
 echo "  • Restart services: docker-compose -f docker-compose.prod.yml restart"
 echo "  • Update: ./scripts/update.sh"
 echo "  • Backup: ./scripts/backup.sh"
+echo
+echo -e "${YELLOW}🛠️  Troubleshooting:${NC}"
+echo "  • If database tables are missing, remove volumes and redeploy:"
+echo "    docker-compose -f docker-compose.prod.yml down -v"
+echo "    ./scripts/deploy.sh"
+echo "  • Check service health: ./scripts/health-check.sh"
 echo
 print_success "AppGrid Backend is ready for production!"
