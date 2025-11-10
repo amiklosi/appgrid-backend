@@ -45,9 +45,15 @@ Thumbs.db
 # IDE files
 .vscode/
 .idea/
+!.idea/runConfigurations/
 *.swp
 *.swo
 *~
 
 # TypeScript cache
 *.tsbuildinfo
+/src/generated/prisma
+
+# SQLite database files
+*.db
+*.db-journal

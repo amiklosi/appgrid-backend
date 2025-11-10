@@ -68,8 +68,8 @@ jobs:
             "${PORTAINER_URL}/api/stacks" | \
             jq -r ".[] | select(.Name==\"${PORTAINER_STACK_NAME}\") | .Id")
 
-          # Prepare docker-compose content
-          COMPOSE_CONTENT=$(cat docker-compose.prod.yml)
+          # Prepare docker-compose content (use staging or prod based on branch)
+          COMPOSE_CONTENT=$(cat docker-compose.staging.yml)
 
           if [ -z "$STACK_ID" ]; then
             echo "Creating new stack: ${PORTAINER_STACK_NAME}"

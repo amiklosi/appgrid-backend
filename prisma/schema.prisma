@@ -1,0 +1,72 @@
+// License Key Management System Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  company   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  licenses License[]
+
+  @@map("users")
+}
+
+enum LicenseStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+  SUSPENDED
+}
+
+model License {
+  id                 String        @id @default(uuid())
+  userId             String        @map("user_id")
+  licenseKey         String        @unique @map("license_key")
+  status             LicenseStatus @default(ACTIVE)
+  issuedAt           DateTime      @default(now()) @map("issued_at")
+  expiresAt          DateTime?     @map("expires_at")
+  activatedAt        DateTime?     @map("activated_at")
+  revokedAt          DateTime?     @map("revoked_at")
+  maxActivations     Int           @default(1) @map("max_activations")
+  currentActivations Int           @default(0) @map("current_activations")
+  metadata           Json?
+  notes              String?
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  validations LicenseValidation[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("licenses")
+}
+
+model LicenseValidation {
+  id                String   @id @default(uuid())
+  licenseId         String   @map("license_id")
+  isValid           Boolean  @map("is_valid")
+  validationMessage String?  @map("validation_message")
+  ipAddress         String?  @map("ip_address")
+  userAgent         String?  @map("user_agent")
+  deviceFingerprint String?  @map("device_fingerprint")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId])
+  @@index([createdAt])
+  @@map("license_validations")
+}

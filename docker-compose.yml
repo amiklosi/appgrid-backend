@@ -8,9 +8,6 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://appgrid_user:appgrid_password@db:5432/appgrid_db
-      - VIRTUAL_HOST=appgrid-staging.zekalogic.com
-      - VIRTUAL_PORT=3000
-      - LETSENCRYPT_HOST=appgrid-staging.zekalogic.com
     depends_on:
       db:
         condition: service_healthy
@@ -20,7 +17,6 @@ services:
     command: yarn dev
     networks:
       - appgrid-network
-      - nginx-proxy
 
   db:
     image: postgres:15
@@ -32,7 +28,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U appgrid_user -d appgrid_db"]
       interval: 5s
@@ -59,5 +54,3 @@ volumes:
 networks:
   appgrid-network:
     driver: bridge
-  nginx-proxy:
-    external: true

@@ -3,24 +3,43 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/index.js",
     "dev": "nodemon --exec ts-node src/index.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "db:reset": "rm -f prisma/dev.db prisma/dev.db-journal && prisma db push && npm run db:seed",
+    "db:seed": "npx ts-node prisma/seed.ts",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "prisma:generate": "prisma generate",
+    "prisma:studio": "prisma studio"
   },
   "license": "MIT",
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^24.1.0",
+    "@vitest/ui": "^4.0.8",
     "nodemon": "^3.1.10",
+    "pino-pretty": "^13.1.2",
+    "prisma": "^6.19.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^4.0.8",
+    "vitest-mock-extended": "^3.1.0"
   },
   "dependencies": {
+    "@fastify/cors": "^11.1.0",
+    "@fastify/helmet": "^13.0.2",
+    "@fastify/rate-limit": "^10.3.0",
+    "@prisma/client": "^6.19.0",
+    "@sinclair/typebox": "^0.34.41",
     "@types/pg": "^8.15.5",
     "crypto": "^1.0.1",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
+    "fastify": "^5.6.2",
     "pg": "^8.16.3"
   }
 }

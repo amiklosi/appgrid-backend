@@ -91,13 +91,16 @@ STACK_ID=$(curl -s -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
     "${PORTAINER_URL}/api/stacks" | \
     jq -r ".[] | select(.Name==\"${PORTAINER_STACK_NAME}\") | .Id")
 
-# Read docker-compose file
-if [ ! -f "docker-compose.prod.yml" ]; then
-    print_error "docker-compose.prod.yml not found"
+# Determine which compose file to use
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.staging.yml}"
+
+if [ ! -f "$COMPOSE_FILE" ]; then
+    print_error "$COMPOSE_FILE not found"
     exit 1
 fi
 
-COMPOSE_CONTENT=$(cat docker-compose.prod.yml)
+print_status "Using compose file: $COMPOSE_FILE"
+COMPOSE_CONTENT=$(cat "$COMPOSE_FILE")
 
 if [ -z "$STACK_ID" ]; then
     print_status "Creating new stack: ${PORTAINER_STACK_NAME}"

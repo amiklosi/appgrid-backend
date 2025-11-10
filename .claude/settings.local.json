@@ -3,7 +3,27 @@
     "allow": [
       "Bash(rm:*)",
       "Bash(chmod:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(yarn add:*)",
+      "Bash(npx prisma init:*)",
+      "Bash(npx prisma:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(yarn build:*)",
+      "Bash(curl:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(npm run db:reset:*)",
+      "Bash(kill:*)",
+      "Bash(sqlite3:*)",
+      "Bash(echo:*)",
+      "Bash(yarn test:run:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run db:seed:*)",
+      "Bash(timeout 5 npm run db:seed:*)",
+      "Bash(ts-node:*)",
+      "Bash(docker build:*)",
+      "Bash(docker push:*)",
+      "Bash(bash:*)",
+      "Bash(docker buildx build:*)"
     ],
     "deny": [],
     "ask": []

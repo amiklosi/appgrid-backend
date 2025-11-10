@@ -7,9 +7,9 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://appgrid_user:${POSTGRES_PASSWORD}@db:5432/appgrid_db
-      - VIRTUAL_HOST=appgrid.zekalogic.com
+      - VIRTUAL_HOST=appgrid-staging.zekalogic.com
       - VIRTUAL_PORT=3000
-      - LETSENCRYPT_HOST=appgrid.zekalogic.com
+      - LETSENCRYPT_HOST=appgrid-staging.zekalogic.com
     depends_on:
       db:
         condition: service_healthy
