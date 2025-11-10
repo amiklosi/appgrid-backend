@@ -7,13 +7,16 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgresql://appgrid_user:${POSTGRES_PASSWORD}@db:5432/appgrid_db
-      - API_KEY=${API_KEY}
+      - VIRTUAL_HOST=appgrid-staging.zekalogic.com
+      - VIRTUAL_PORT=3000
+      - LETSENCRYPT_HOST=appgrid-staging.zekalogic.com
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
     networks:
       - appgrid-network
+      - nginx-proxy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
       interval: 30s
@@ -63,3 +66,5 @@ volumes:
 networks:
   appgrid-network:
     driver: bridge
+  nginx-proxy:
+    external: true

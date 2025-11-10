@@ -1,0 +1,141 @@
+name: Deploy to Portainer
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # Allow manual trigger
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Portainer
+        env:
+          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_ACCESS_TOKEN: ${{ secrets.PORTAINER_ACCESS_TOKEN }}
+          PORTAINER_STACK_NAME: ${{ secrets.PORTAINER_STACK_NAME }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          # Get Portainer endpoint ID (usually 1 or 2 for local Docker)
+          ENDPOINT_ID=$(curl -s -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
+            "${PORTAINER_URL}/api/endpoints" | jq -r '.[0].Id')
+
+          echo "Using Portainer endpoint: ${ENDPOINT_ID}"
+
+          # Check if stack exists
+          STACK_ID=$(curl -s -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
+            "${PORTAINER_URL}/api/stacks" | \
+            jq -r ".[] | select(.Name==\"${PORTAINER_STACK_NAME}\") | .Id")
+
+          # Prepare docker-compose content
+          COMPOSE_CONTENT=$(cat docker-compose.prod.yml)
+
+          if [ -z "$STACK_ID" ]; then
+            echo "Creating new stack: ${PORTAINER_STACK_NAME}"
+
+            # Create new stack
+            curl -X POST "${PORTAINER_URL}/api/stacks/create/standalone/string?endpointId=${ENDPOINT_ID}" \
+              -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d @- <<EOF
+          {
+            "name": "${PORTAINER_STACK_NAME}",
+            "stackFileContent": $(echo "$COMPOSE_CONTENT" | jq -Rs .),
+            "env": [
+              {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"}
+            ]
+          }
+          EOF
+
+            echo "Stack created successfully"
+          else
+            echo "Updating existing stack: ${PORTAINER_STACK_NAME} (ID: ${STACK_ID})"
+
+            # Update existing stack
+            curl -X PUT "${PORTAINER_URL}/api/stacks/${STACK_ID}?endpointId=${ENDPOINT_ID}" \
+              -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d @- <<EOF
+          {
+            "stackFileContent": $(echo "$COMPOSE_CONTENT" | jq -Rs .),
+            "env": [
+              {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"}
+            ],
+            "prune": false,
+            "pullImage": true
+          }
+          EOF
+
+            echo "Stack updated successfully"
+          fi
+
+          # Wait for deployment
+          sleep 10
+
+          # Check stack status
+          curl -s -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
+            "${PORTAINER_URL}/api/stacks" | \
+            jq ".[] | select(.Name==\"${PORTAINER_STACK_NAME}\")"
+
+      - name: Verify deployment
+        env:
+          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_ACCESS_TOKEN: ${{ secrets.PORTAINER_ACCESS_TOKEN }}
+          PORTAINER_STACK_NAME: ${{ secrets.PORTAINER_STACK_NAME }}
+        run: |
+          echo "Waiting for services to be healthy..."
+          sleep 30
+
+          # Get stack info
+          STACK_INFO=$(curl -s -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
+            "${PORTAINER_URL}/api/stacks" | \
+            jq ".[] | select(.Name==\"${PORTAINER_STACK_NAME}\")")
+
+          if [ -n "$STACK_INFO" ]; then
+            echo "✅ Stack deployed successfully!"
+            echo "$STACK_INFO" | jq .
+          else
+            echo "❌ Stack deployment verification failed"
+            exit 1
+          fi

@@ -8,6 +8,9 @@ services:
     environment:
       - NODE_ENV=development
       - DATABASE_URL=postgresql://appgrid_user:appgrid_password@db:5432/appgrid_db
+      - VIRTUAL_HOST=appgrid-staging.zekalogic.com
+      - VIRTUAL_PORT=3000
+      - LETSENCRYPT_HOST=appgrid-staging.zekalogic.com
     depends_on:
       db:
         condition: service_healthy
@@ -17,6 +20,7 @@ services:
     command: yarn dev
     networks:
       - appgrid-network
+      - nginx-proxy
 
   db:
     image: postgres:15
@@ -55,3 +59,5 @@ volumes:
 networks:
   appgrid-network:
     driver: bridge
+  nginx-proxy:
+    external: true
