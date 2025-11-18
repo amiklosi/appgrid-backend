@@ -60,6 +60,7 @@ jobs:
           MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
           MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
           REVENUECAT_API_KEY: ${{ secrets.REVENUECAT_API_KEY }}
+          REVENUECAT_PROJECT_ID: ${{ secrets.REVENUECAT_PROJECT_ID }}
         run: |
           # Get Portainer endpoint ID (usually 1 or 2 for local Docker)
           ENDPOINT_ID=$(curl -s -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
@@ -90,7 +91,8 @@ jobs:
               {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
               {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
               {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
-              {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"}
+              {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
+              {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"}
             ]
           }
           EOF
@@ -110,7 +112,8 @@ jobs:
               {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
               {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
               {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
-              {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"}
+              {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
+              {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"}
             ],
             "prune": false,
             "pullImage": true

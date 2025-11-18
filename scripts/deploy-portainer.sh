@@ -84,6 +84,11 @@ if [ -z "$REVENUECAT_API_KEY" ]; then
     exit 1
 fi
 
+if [ -z "$REVENUECAT_PROJECT_ID" ]; then
+    print_error "REVENUECAT_PROJECT_ID not set in .env"
+    exit 1
+fi
+
 print_status "🚀 Starting Portainer deployment..."
 print_status "Portainer URL: ${PORTAINER_URL}"
 print_status "Stack Name: ${PORTAINER_STACK_NAME}"
@@ -132,7 +137,8 @@ if [ -z "$STACK_ID" ]; then
     {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
     {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
     {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
-    {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"}
+    {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
+    {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"}
   ]
 }
 EOF
@@ -160,7 +166,8 @@ else
     {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
     {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
     {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
-    {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"}
+    {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
+    {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"}
   ],
   "prune": false,
   "pullImage": true
