@@ -79,6 +79,11 @@ if [ -z "$MAILGUN_DOMAIN" ]; then
     exit 1
 fi
 
+if [ -z "$REVENUECAT_API_KEY" ]; then
+    print_error "REVENUECAT_API_KEY not set in .env"
+    exit 1
+fi
+
 print_status "🚀 Starting Portainer deployment..."
 print_status "Portainer URL: ${PORTAINER_URL}"
 print_status "Stack Name: ${PORTAINER_STACK_NAME}"
@@ -126,7 +131,8 @@ if [ -z "$STACK_ID" ]; then
   "env": [
     {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
     {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
-    {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"}
+    {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
+    {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"}
   ]
 }
 EOF
@@ -153,7 +159,8 @@ else
   "env": [
     {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
     {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
-    {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"}
+    {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
+    {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"}
   ],
   "prune": false,
   "pullImage": true

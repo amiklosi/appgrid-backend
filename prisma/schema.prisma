@@ -17,7 +17,8 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  licenses License[]
+  licenses            License[]
+  revenueCatMigrations RevenueCatMigration[]
 
   @@map("users")
 }
@@ -45,8 +46,9 @@ model License {
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
-  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  validations LicenseValidation[]
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  validations          LicenseValidation[]
+  revenueCatMigrations RevenueCatMigration[]
 
   @@index([userId])
   @@index([status])
@@ -69,4 +71,25 @@ model LicenseValidation {
   @@index([licenseId])
   @@index([createdAt])
   @@map("license_validations")
+}
+
+model RevenueCatMigration {
+  id                  String   @id @default(uuid())
+  revenueCatUserId    String   @unique @map("revenuecat_user_id")
+  email               String
+  licenseId           String   @map("license_id")
+  userId              String   @map("user_id")
+  emailSent           Boolean  @default(false) @map("email_sent")
+  emailSentAt         DateTime? @map("email_sent_at")
+  revenueCatData      Json?    @map("revenuecat_data")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([revenueCatUserId])
+  @@index([createdAt])
+  @@map("revenuecat_migrations")
 }

@@ -104,18 +104,20 @@ export class LicenseService {
     }
 
     // Log validation attempt
-    await prisma.licenseValidation.create({
-      data: {
-        licenseId: license?.id || '',
-        isValid,
-        validationMessage: message,
-        ipAddress,
-        userAgent,
-        deviceFingerprint,
-      },
-    }).catch(() => {
-      // Ignore validation logging errors if license doesn't exist
-    });
+    await prisma.licenseValidation
+      .create({
+        data: {
+          licenseId: license?.id || '',
+          isValid,
+          validationMessage: message,
+          ipAddress,
+          userAgent,
+          deviceFingerprint,
+        },
+      })
+      .catch(() => {
+        // Ignore validation logging errors if license doesn't exist
+      });
 
     return {
       valid: isValid,
@@ -161,23 +163,26 @@ export class LicenseService {
     }
 
     // Log deactivation attempt
-    await prisma.licenseValidation.create({
-      data: {
-        licenseId: license?.id || '',
-        isValid: success,
-        validationMessage: `Deactivation: ${message}`,
-        ipAddress,
-        userAgent,
-        deviceFingerprint,
-      },
-    }).catch(() => {
-      // Ignore validation logging errors if license doesn't exist
-    });
+    await prisma.licenseValidation
+      .create({
+        data: {
+          licenseId: license?.id || '',
+          isValid: success,
+          validationMessage: `Deactivation: ${message}`,
+          ipAddress,
+          userAgent,
+          deviceFingerprint,
+        },
+      })
+      .catch(() => {
+        // Ignore validation logging errors if license doesn't exist
+      });
 
     return {
       success,
       message,
-      currentActivations: success && license ? license.currentActivations - 1 : license?.currentActivations,
+      currentActivations:
+        success && license ? license.currentActivations - 1 : license?.currentActivations,
     };
   }
 

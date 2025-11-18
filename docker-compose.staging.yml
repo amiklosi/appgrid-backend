@@ -12,6 +12,7 @@ services:
       - LETSENCRYPT_HOST=appgrid-staging.zekalogic.com
       - MAILGUN_API_KEY=${MAILGUN_API_KEY}
       - MAILGUN_DOMAIN=${MAILGUN_DOMAIN}
+      - REVENUECAT_API_KEY=${REVENUECAT_API_KEY}
     depends_on:
       db:
         condition: service_healthy
