@@ -69,6 +69,16 @@ if [ -z "$POSTGRES_PASSWORD" ]; then
     exit 1
 fi
 
+if [ -z "$MAILGUN_API_KEY" ]; then
+    print_error "MAILGUN_API_KEY not set in .env"
+    exit 1
+fi
+
+if [ -z "$MAILGUN_DOMAIN" ]; then
+    print_error "MAILGUN_DOMAIN not set in .env"
+    exit 1
+fi
+
 print_status "🚀 Starting Portainer deployment..."
 print_status "Portainer URL: ${PORTAINER_URL}"
 print_status "Stack Name: ${PORTAINER_STACK_NAME}"
@@ -114,7 +124,9 @@ if [ -z "$STACK_ID" ]; then
   "name": "${PORTAINER_STACK_NAME}",
   "stackFileContent": $(echo "$COMPOSE_CONTENT" | jq -Rs .),
   "env": [
-    {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"}
+    {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
+    {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
+    {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"}
   ]
 }
 EOF
@@ -139,7 +151,9 @@ else
 {
   "stackFileContent": $(echo "$COMPOSE_CONTENT" | jq -Rs .),
   "env": [
-    {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"}
+    {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
+    {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
+    {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"}
   ],
   "prune": false,
   "pullImage": true
