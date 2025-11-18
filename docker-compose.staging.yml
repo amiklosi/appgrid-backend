@@ -10,6 +10,8 @@ services:
       - VIRTUAL_HOST=appgrid-staging.zekalogic.com
       - VIRTUAL_PORT=3000
       - LETSENCRYPT_HOST=appgrid-staging.zekalogic.com
+      - MAILGUN_API_KEY=${MAILGUN_API_KEY}
+      - MAILGUN_DOMAIN=${MAILGUN_DOMAIN}
     depends_on:
       db:
         condition: service_healthy

@@ -62,12 +62,14 @@ async function registerRoutes() {
       endpoints: {
         health: '/health',
         licenses: '/api/licenses',
+        emailTest: '/api/email/test',
       },
     };
   });
 
   // Import and register API routes
   await fastify.register(import('./routes/licenses'), { prefix: '/api' });
+  await fastify.register(import('./routes/email'), { prefix: '/api' });
 }
 
 // Graceful shutdown
