@@ -51,3 +51,65 @@ curl -X POST http://localhost:3000/api/revenuecat/migrate \
 ## Important Notes
 - If you reset the database, any old dev server instances will still have the old database cached in memory
 - Kill all dev server processes after a database reset to avoid stale data issues
+
+## Adding New Environment Variables
+
+When adding a new environment variable to the project, it must be added to **ALL** of the following locations:
+
+### 1. Local Development
+- **`.env`**: Add the variable for local development
+
+### 2. Docker Compose Files
+- **`docker-compose.staging.yml`**: Add to the `app.environment` section
+- **`docker-compose.prod.yml`**: Add to the `app.environment` section
+
+Format:
+```yaml
+- VARIABLE_NAME=${VARIABLE_NAME}
+```
+
+### 3. Portainer Deployment Script
+- **`scripts/deploy-portainer.sh`**: Add in THREE places:
+  1. **Validation section** (around line 82-90): Add check to ensure variable is set
+     ```bash
+     if [ -z "$VARIABLE_NAME" ]; then
+         print_error "VARIABLE_NAME not set in .env"
+         exit 1
+     fi
+     ```
+  2. **Stack creation** (around line 135): Add to the `env` array
+     ```json
+     {"name": "VARIABLE_NAME", "value": "${VARIABLE_NAME}"}
+     ```
+  3. **Stack update** (around line 163): Add to the `env` array
+     ```json
+     {"name": "VARIABLE_NAME", "value": "${VARIABLE_NAME}"}
+     ```
+
+### 4. GitHub Actions Workflow
+- **`.github/workflows/deploy-portainer.yml`**: Add in THREE places:
+  1. **Workflow env section** (around line 62): Add to the `env` block
+     ```yaml
+     VARIABLE_NAME: ${{ secrets.VARIABLE_NAME }}
+     ```
+  2. **Stack creation** (around line 93): Add to the `env` array
+     ```json
+     {"name": "VARIABLE_NAME", "value": "${VARIABLE_NAME}"}
+     ```
+  3. **Stack update** (around line 113): Add to the `env` array
+     ```json
+     {"name": "VARIABLE_NAME", "value": "${VARIABLE_NAME}"}
+     ```
+
+### 5. GitHub Secrets
+- Go to repository **Settings → Secrets and variables → Actions**
+- Add the variable as a **repository secret** for the appropriate environment (staging/production)
+
+### Example Checklist
+When adding `NEW_VAR`, ensure it's added to:
+- [ ] `.env`
+- [ ] `docker-compose.staging.yml`
+- [ ] `docker-compose.prod.yml`
+- [ ] `scripts/deploy-portainer.sh` (validation + create + update)
+- [ ] `.github/workflows/deploy-portainer.yml` (env + create + update)
+- [ ] GitHub repository secrets
