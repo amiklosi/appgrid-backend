@@ -57,6 +57,8 @@ services:
     environment:
       - ADMINER_DEFAULT_SERVER=db
       - ADMINER_DESIGN=nette
+      - VIRTUAL_HOST=admin-staging.zekalogic.com
+      - VIRTUAL_PORT=8080
     depends_on:
       db:
         condition: service_healthy
