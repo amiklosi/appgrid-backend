@@ -134,7 +134,7 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
       }
 
       // Fetch customer details from Paddle API
-      const customerDetails = await fetchPaddleCustomer(fastify, customerId, transactionId);
+      const customerDetails = await fetchPaddleCustomer(fastify, customerId, transactionId, data);
 
       // Process purchase in a database transaction for atomicity
       const result = await prisma.$transaction(async (tx) => {
@@ -370,7 +370,7 @@ async function handleAdjustmentUpdated(fastify: any, payload: any, data: any) {
 /**
  * Fetch customer details from Paddle API with error handling and retry
  */
-async function fetchPaddleCustomer(fastify: any, customerId: string, transactionId: string) {
+async function fetchPaddleCustomer(fastify: any, customerId: string, transactionId: string, transactionData: any) {
   const paddleApiKey = process.env.PADDLE_API_KEY;
   if (!paddleApiKey) {
     fastify.log.error('PADDLE_API_KEY not configured');
@@ -418,11 +418,26 @@ async function fetchPaddleCustomer(fastify: any, customerId: string, transaction
           throw new WebhookError('Customer email not found', false, 400);
         }
 
-        fastify.log.info({ transactionId, customerId, customerEmail, marketingConsent }, 'Fetched customer details from Paddle');
+        // Use cardholder name as fallback if customer name is not available
+        const cardholderName = transactionData.payments?.[0]?.method_details?.card?.cardholder_name;
+        const finalName = customerName || cardholderName || null;
+
+        fastify.log.info(
+          {
+            transactionId,
+            customerId,
+            customerEmail,
+            customerName,
+            cardholderName,
+            finalName,
+            marketingConsent
+          },
+          'Fetched customer details from Paddle'
+        );
 
         return {
           email: customerEmail,
-          name: customerName,
+          name: finalName,
           marketingConsent,
         };
       },
