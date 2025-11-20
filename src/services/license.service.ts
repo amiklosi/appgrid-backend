@@ -57,13 +57,70 @@ export class LicenseService {
   }
 
   /**
+   * Check a license key (read-only, no activation or updates)
+   */
+  static async checkLicense(
+    licenseKey: string,
+    deviceFingerprint?: string
+  ) {
+    const license = await prisma.license.findUnique({
+      where: { licenseKey },
+      include: {
+        user: true,
+        deviceActivations: true,
+      },
+    });
+
+    let isValid = false;
+    let message = '';
+
+    if (!license) {
+      message = 'License key not found';
+    } else if (license.status === 'REVOKED') {
+      message = 'License has been revoked';
+    } else if (license.status === 'SUSPENDED') {
+      message = 'License is suspended';
+    } else if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
+      message = 'License has expired';
+    } else {
+      // Check device-level activation if fingerprint provided
+      if (deviceFingerprint) {
+        // Check if this device is already activated
+        const existingActivation = license.deviceActivations.find(
+          (d) => d.deviceFingerprint === deviceFingerprint
+        );
+
+        if (existingActivation) {
+          isValid = true;
+          message = 'License is valid for this device';
+        } else {
+          // Device is not activated
+          isValid = false;
+          message = 'Device not activated for this license';
+        }
+      } else {
+        // No device fingerprint - just validate the license itself
+        isValid = true;
+        message = 'License is valid (no device tracking)';
+      }
+    }
+
+    return {
+      valid: isValid,
+      license: isValid ? license : null,
+      message,
+    };
+  }
+
+  /**
    * Validate a license key
    */
   static async validateLicense(
     licenseKey: string,
     deviceFingerprint?: string,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    deviceName?: string
   ) {
     const license = await prisma.license.findUnique({
       where: { licenseKey },
@@ -117,6 +174,7 @@ export class LicenseService {
               data: {
                 licenseId: license.id,
                 deviceFingerprint,
+                deviceName,
                 ipAddress,
                 userAgent,
               },

@@ -3,6 +3,7 @@ import { LicenseService } from '../services/license.service';
 import {
   CreateLicenseSchema,
   ValidateLicenseSchema,
+  CheckLicenseSchema,
   DeactivateLicenseSchema,
   UpdateLicenseSchema,
   LicenseResponseSchema,
@@ -44,7 +45,7 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { licenseKey, deviceFingerprint } = request.body as any;
+      const { licenseKey, deviceFingerprint, deviceName } = request.body as any;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'];
 
@@ -52,7 +53,33 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
         licenseKey,
         deviceFingerprint,
         ipAddress,
-        userAgent
+        userAgent,
+        deviceName
+      );
+
+      return reply.send(result);
+    }
+  );
+
+  // Check a license key (read-only, no activation)
+  fastify.post(
+    '/licenses/check',
+    {
+      schema: {
+        body: CheckLicenseSchema,
+        response: {
+          200: ValidationResponseSchema,
+        },
+        tags: ['licenses'],
+        description: 'Check a license key without activating (read-only)',
+      },
+    },
+    async (request, reply) => {
+      const { licenseKey, deviceFingerprint } = request.body as any;
+
+      const result = await LicenseService.checkLicense(
+        licenseKey,
+        deviceFingerprint
       );
 
       return reply.send(result);

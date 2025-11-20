@@ -23,9 +23,18 @@ export type CreateLicenseDTO = Static<typeof CreateLicenseSchema>;
 export const ValidateLicenseSchema = Type.Object({
   licenseKey: Type.String({ minLength: 1 }),
   deviceFingerprint: Type.Optional(Type.String()),
+  deviceName: Type.Optional(Type.String()),
 });
 
 export type ValidateLicenseDTO = Static<typeof ValidateLicenseSchema>;
+
+// Check license request (read-only, no activation)
+export const CheckLicenseSchema = Type.Object({
+  licenseKey: Type.String({ minLength: 1 }),
+  deviceFingerprint: Type.Optional(Type.String()),
+});
+
+export type CheckLicenseDTO = Static<typeof CheckLicenseSchema>;
 
 // Deactivate license request
 export const DeactivateLicenseSchema = Type.Object({

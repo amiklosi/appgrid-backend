@@ -273,6 +273,267 @@ describe('LicenseService', () => {
     });
   });
 
+  describe('checkLicense', () => {
+    it('should return valid for activated device', async () => {
+      const licenseKey = 'ABCD-EFGH-IJKL-MNOP';
+      const deviceFingerprint = 'device-fp-123';
+      const mockLicense = {
+        id: 'license-123',
+        userId: 'user-123',
+        licenseKey,
+        status: 'ACTIVE' as const,
+        issuedAt: new Date(),
+        expiresAt: null,
+        activatedAt: new Date(),
+        revokedAt: null,
+        maxActivations: 5,
+        currentActivations: 1,
+        metadata: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          name: 'Test User',
+        },
+        deviceActivations: [
+          {
+            id: 'device-1',
+            licenseId: 'license-123',
+            deviceFingerprint,
+            deviceName: 'Test Device',
+            ipAddress: '192.168.1.1',
+            userAgent: 'TestAgent',
+            activatedAt: new Date(),
+            lastSeenAt: new Date(),
+          },
+        ],
+      };
+
+      prismaMock.license.findUnique.mockResolvedValue(mockLicense);
+
+      const result = await LicenseService.checkLicense(licenseKey, deviceFingerprint);
+
+      expect(result.valid).toBe(true);
+      expect(result.message).toBe('License is valid for this device');
+      expect(result.license).toEqual(mockLicense);
+    });
+
+    it('should return invalid for non-activated device', async () => {
+      const licenseKey = 'ABCD-EFGH-IJKL-MNOP';
+      const mockLicense = {
+        id: 'license-123',
+        userId: 'user-123',
+        licenseKey,
+        status: 'ACTIVE' as const,
+        issuedAt: new Date(),
+        expiresAt: null,
+        activatedAt: null,
+        revokedAt: null,
+        maxActivations: 5,
+        currentActivations: 0,
+        metadata: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          name: 'Test User',
+        },
+        deviceActivations: [],
+      };
+
+      prismaMock.license.findUnique.mockResolvedValue(mockLicense);
+
+      const result = await LicenseService.checkLicense(licenseKey, 'new-device-fp');
+
+      expect(result.valid).toBe(false);
+      expect(result.message).toBe('Device not activated for this license');
+      expect(result.license).toBeNull();
+    });
+
+    it('should return valid for license without device fingerprint', async () => {
+      const licenseKey = 'ABCD-EFGH-IJKL-MNOP';
+      const mockLicense = {
+        id: 'license-123',
+        userId: 'user-123',
+        licenseKey,
+        status: 'ACTIVE' as const,
+        issuedAt: new Date(),
+        expiresAt: null,
+        activatedAt: null,
+        revokedAt: null,
+        maxActivations: 5,
+        currentActivations: 0,
+        metadata: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          name: 'Test User',
+        },
+        deviceActivations: [],
+      };
+
+      prismaMock.license.findUnique.mockResolvedValue(mockLicense);
+
+      const result = await LicenseService.checkLicense(licenseKey);
+
+      expect(result.valid).toBe(true);
+      expect(result.message).toBe('License is valid (no device tracking)');
+      expect(result.license).toEqual(mockLicense);
+    });
+
+    it('should return invalid for expired license', async () => {
+      const mockLicense = {
+        id: 'license-123',
+        userId: 'user-123',
+        licenseKey: 'ABCD-EFGH-IJKL-MNOP',
+        status: 'ACTIVE' as const,
+        issuedAt: new Date(),
+        expiresAt: new Date('2020-01-01'), // Expired
+        activatedAt: null,
+        revokedAt: null,
+        maxActivations: 1,
+        currentActivations: 0,
+        metadata: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          name: 'Test User',
+        },
+        deviceActivations: [],
+      };
+
+      prismaMock.license.findUnique.mockResolvedValue(mockLicense);
+
+      const result = await LicenseService.checkLicense('ABCD-EFGH-IJKL-MNOP', 'device-fp-123');
+
+      expect(result.valid).toBe(false);
+      expect(result.message).toBe('License has expired');
+      expect(result.license).toBeNull();
+    });
+
+    it('should return invalid for revoked license', async () => {
+      const mockLicense = {
+        id: 'license-123',
+        userId: 'user-123',
+        licenseKey: 'ABCD-EFGH-IJKL-MNOP',
+        status: 'REVOKED' as const,
+        issuedAt: new Date(),
+        expiresAt: null,
+        activatedAt: new Date(),
+        revokedAt: new Date(),
+        maxActivations: 1,
+        currentActivations: 1,
+        metadata: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          name: 'Test User',
+        },
+        deviceActivations: [],
+      };
+
+      prismaMock.license.findUnique.mockResolvedValue(mockLicense);
+
+      const result = await LicenseService.checkLicense('ABCD-EFGH-IJKL-MNOP', 'device-fp-123');
+
+      expect(result.valid).toBe(false);
+      expect(result.message).toBe('License has been revoked');
+      expect(result.license).toBeNull();
+    });
+
+    it('should return invalid for suspended license', async () => {
+      const mockLicense = {
+        id: 'license-123',
+        userId: 'user-123',
+        licenseKey: 'ABCD-EFGH-IJKL-MNOP',
+        status: 'SUSPENDED' as const,
+        issuedAt: new Date(),
+        expiresAt: null,
+        activatedAt: new Date(),
+        revokedAt: null,
+        maxActivations: 1,
+        currentActivations: 1,
+        metadata: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          name: 'Test User',
+        },
+        deviceActivations: [],
+      };
+
+      prismaMock.license.findUnique.mockResolvedValue(mockLicense);
+
+      const result = await LicenseService.checkLicense('ABCD-EFGH-IJKL-MNOP', 'device-fp-123');
+
+      expect(result.valid).toBe(false);
+      expect(result.message).toBe('License is suspended');
+      expect(result.license).toBeNull();
+    });
+
+    it('should return invalid for non-existent license', async () => {
+      prismaMock.license.findUnique.mockResolvedValue(null);
+
+      const result = await LicenseService.checkLicense('FAKE-KEY-1234', 'device-fp-123');
+
+      expect(result.valid).toBe(false);
+      expect(result.message).toBe('License key not found');
+      expect(result.license).toBeNull();
+    });
+
+    it('should not create any database records', async () => {
+      const licenseKey = 'ABCD-EFGH-IJKL-MNOP';
+      const mockLicense = {
+        id: 'license-123',
+        userId: 'user-123',
+        licenseKey,
+        status: 'ACTIVE' as const,
+        issuedAt: new Date(),
+        expiresAt: null,
+        activatedAt: null,
+        revokedAt: null,
+        maxActivations: 5,
+        currentActivations: 0,
+        metadata: null,
+        notes: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          name: 'Test User',
+        },
+        deviceActivations: [],
+      };
+
+      prismaMock.license.findUnique.mockResolvedValue(mockLicense);
+
+      await LicenseService.checkLicense(licenseKey, 'device-fp-123');
+
+      // Should only read, not write
+      expect(prismaMock.deviceActivation.create).not.toHaveBeenCalled();
+      expect(prismaMock.deviceActivation.update).not.toHaveBeenCalled();
+      expect(prismaMock.license.update).not.toHaveBeenCalled();
+      expect(prismaMock.licenseValidation.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('deactivateLicense', () => {
     it('should deactivate a license successfully', async () => {
       const licenseKey = 'ABCD-EFGH-IJKL-MNOP';
