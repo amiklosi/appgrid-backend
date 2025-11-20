@@ -66,6 +66,7 @@ services:
     restart: unless-stopped
     networks:
       - appgrid-network
+      - nginx-proxy
 
 volumes:
   postgres_data:
