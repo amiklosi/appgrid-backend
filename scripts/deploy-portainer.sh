@@ -89,6 +89,11 @@ if [ -z "$REVENUECAT_PROJECT_ID" ]; then
     exit 1
 fi
 
+if [ -z "$PADDLE_API_KEY" ]; then
+    print_error "PADDLE_API_KEY not set in .env"
+    exit 1
+fi
+
 if [ -z "$PADDLE_WEBHOOK_SECRET" ]; then
     print_error "PADDLE_WEBHOOK_SECRET not set in .env"
     exit 1
@@ -144,6 +149,7 @@ if [ -z "$STACK_ID" ]; then
     {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
     {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
     {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"},
+    {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
     {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"}
   ]
 }
@@ -174,6 +180,7 @@ else
     {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
     {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
     {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"},
+    {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
     {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"}
   ],
   "prune": false,

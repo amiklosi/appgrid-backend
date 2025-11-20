@@ -1,5 +1,14 @@
 import { PrismaClient } from '@prisma/client';
-import { LicenseService } from '../src/services/license.service';
+
+// Import from compiled code if available (production), otherwise from source (dev)
+let LicenseService: any;
+try {
+  // Try production path first (compiled code)
+  LicenseService = require('../dist/services/license.service').LicenseService;
+} catch {
+  // Fall back to dev path (TypeScript source)
+  LicenseService = require('../src/services/license.service').LicenseService;
+}
 
 const prisma = new PrismaClient();
 

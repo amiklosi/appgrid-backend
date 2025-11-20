@@ -61,6 +61,7 @@ jobs:
           MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
           REVENUECAT_API_KEY: ${{ secrets.REVENUECAT_API_KEY }}
           REVENUECAT_PROJECT_ID: ${{ secrets.REVENUECAT_PROJECT_ID }}
+          PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY }}
           PADDLE_WEBHOOK_SECRET: ${{ secrets.PADDLE_WEBHOOK_SECRET }}
         run: |
           # Get Portainer endpoint ID (usually 1 or 2 for local Docker)
@@ -94,6 +95,7 @@ jobs:
               {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
               {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
               {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"},
+              {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
               {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"}
             ]
           }
@@ -116,6 +118,7 @@ jobs:
               {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
               {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
               {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"},
+              {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
               {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"}
             ],
             "prune": false,

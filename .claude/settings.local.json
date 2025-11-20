@@ -32,7 +32,8 @@
       "WebSearch",
       "Bash(yarn test:*)",
       "Bash(git checkout:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(npm test:*)"
     ],
     "deny": [],
     "ask": []
