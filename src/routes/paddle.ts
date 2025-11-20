@@ -403,7 +403,8 @@ async function fetchPaddleCustomer(fastify: any, customerId: string, transaction
           // Determine if this is retryable
           const isRetryable = customerResponse.status >= 500 || customerResponse.status === 429;
           const error = new WebhookError('Failed to fetch customer details', isRetryable, 500);
-          (error as any).statusCode = customerResponse.status;
+          // Store original status for logging (but always return 500 to Paddle for retries)
+          (error as any).paddleStatus = customerResponse.status;
           throw error;
         }
 
@@ -446,10 +447,10 @@ async function fetchPaddleCustomer(fastify: any, customerId: string, transaction
     );
   } catch (error: any) {
     // All retries failed - send alert email
-    const statusCode = (error as any).statusCode || 'unknown';
+    const paddleStatus = (error as any).paddleStatus || 'unknown';
 
     fastify.log.error(
-      { transactionId, customerId, error: error.message, statusCode },
+      { transactionId, customerId, error: error.message, paddleStatus },
       'Failed to fetch customer after all retries - sending alert'
     );
 
@@ -461,7 +462,7 @@ async function fetchPaddleCustomer(fastify: any, customerId: string, transaction
         {
           transactionId,
           customerId,
-          statusCode,
+          paddleStatus,
           error: error.message,
           paddleApiUrl,
           isSandbox,
