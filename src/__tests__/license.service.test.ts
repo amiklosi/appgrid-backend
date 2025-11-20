@@ -126,22 +126,23 @@ describe('LicenseService', () => {
           email: 'test@example.com',
           name: 'Test User',
         },
+        deviceActivations: [],
       };
 
       prismaMock.license.findUnique.mockResolvedValue(mockLicense);
+      prismaMock.deviceActivation.create.mockResolvedValue({} as any);
       prismaMock.license.update.mockResolvedValue({
         ...mockLicense,
-        currentActivations: 1,
         activatedAt: new Date(),
       });
       prismaMock.licenseValidation.create.mockResolvedValue({} as any);
 
-      const result = await LicenseService.validateLicense(licenseKey);
+      const result = await LicenseService.validateLicense(licenseKey, 'device-fp-123');
 
       expect(result.valid).toBe(true);
       expect(result.message).toBe('License is valid');
       expect(result.license).toEqual(mockLicense);
-      expect(prismaMock.license.update).toHaveBeenCalled();
+      expect(prismaMock.deviceActivation.create).toHaveBeenCalled();
     });
 
     it('should reject non-existent license key', async () => {
@@ -249,12 +250,23 @@ describe('LicenseService', () => {
           email: 'test@example.com',
           name: 'Test User',
         },
+        deviceActivations: [
+          {
+            id: 'device-1',
+            licenseId: 'license-123',
+            deviceFingerprint: 'existing-device',
+            ipAddress: '192.168.1.1',
+            userAgent: 'TestAgent',
+            activatedAt: new Date(),
+            lastSeenAt: new Date(),
+          },
+        ],
       };
 
       prismaMock.license.findUnique.mockResolvedValue(mockLicense);
       prismaMock.licenseValidation.create.mockResolvedValue({} as any);
 
-      const result = await LicenseService.validateLicense('ABCD-EFGH-IJKL-MNOP');
+      const result = await LicenseService.validateLicense('ABCD-EFGH-IJKL-MNOP', 'new-device-fp');
 
       expect(result.valid).toBe(false);
       expect(result.message).toBe('Maximum activations reached');
@@ -284,13 +296,39 @@ describe('LicenseService', () => {
           email: 'test@example.com',
           name: 'Test User',
         },
+        deviceActivations: [
+          {
+            id: 'device-1',
+            licenseId: 'license-123',
+            deviceFingerprint: 'device-fp-123',
+            ipAddress: '192.168.1.1',
+            userAgent: 'TestAgent',
+            activatedAt: new Date(),
+            lastSeenAt: new Date(),
+          },
+          {
+            id: 'device-2',
+            licenseId: 'license-123',
+            deviceFingerprint: 'device-fp-456',
+            ipAddress: '192.168.1.2',
+            userAgent: 'TestAgent',
+            activatedAt: new Date(),
+            lastSeenAt: new Date(),
+          },
+          {
+            id: 'device-3',
+            licenseId: 'license-123',
+            deviceFingerprint: 'device-fp-789',
+            ipAddress: '192.168.1.3',
+            userAgent: 'TestAgent',
+            activatedAt: new Date(),
+            lastSeenAt: new Date(),
+          },
+        ],
       };
 
       prismaMock.license.findUnique.mockResolvedValue(mockLicense);
-      prismaMock.license.update.mockResolvedValue({
-        ...mockLicense,
-        currentActivations: 2,
-      });
+      prismaMock.deviceActivation.delete.mockResolvedValue({} as any);
       prismaMock.licenseValidation.create.mockResolvedValue({} as any);
 
       const result = await LicenseService.deactivateLicense(licenseKey, 'device-fp-123');
@@ -298,11 +336,7 @@ describe('LicenseService', () => {
       expect(result.success).toBe(true);
       expect(result.message).toBe('License deactivated successfully');
       expect(result.currentActivations).toBe(2);
-      expect(prismaMock.license.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: { currentActivations: { decrement: 1 } },
-        })
-      );
+      expect(prismaMock.deviceActivation.delete).toHaveBeenCalled();
     });
 
     it('should reject deactivation when no activations exist', async () => {
@@ -326,6 +360,7 @@ describe('LicenseService', () => {
           email: 'test@example.com',
           name: 'Test User',
         },
+        deviceActivations: [],
       };
 
       prismaMock.license.findUnique.mockResolvedValue(mockLicense);
@@ -334,8 +369,8 @@ describe('LicenseService', () => {
       const result = await LicenseService.deactivateLicense('ABCD-EFGH-IJKL-MNOP', 'device-fp-123');
 
       expect(result.success).toBe(false);
-      expect(result.message).toBe('No active activations to deactivate');
-      expect(prismaMock.license.update).not.toHaveBeenCalled();
+      expect(result.message).toBe('Device not activated for this license');
+      expect(prismaMock.deviceActivation.delete).not.toHaveBeenCalled();
     });
 
     it('should reject deactivation for non-existent license', async () => {
@@ -369,13 +404,30 @@ describe('LicenseService', () => {
           email: 'test@example.com',
           name: 'Test User',
         },
+        deviceActivations: [
+          {
+            id: 'device-1',
+            licenseId: 'license-123',
+            deviceFingerprint: 'device-123',
+            ipAddress: '192.168.1.1',
+            userAgent: 'TestAgent',
+            activatedAt: new Date(),
+            lastSeenAt: new Date(),
+          },
+          {
+            id: 'device-2',
+            licenseId: 'license-123',
+            deviceFingerprint: 'device-456',
+            ipAddress: '192.168.1.2',
+            userAgent: 'TestAgent',
+            activatedAt: new Date(),
+            lastSeenAt: new Date(),
+          },
+        ],
       };
 
       prismaMock.license.findUnique.mockResolvedValue(mockLicense);
-      prismaMock.license.update.mockResolvedValue({
-        ...mockLicense,
-        currentActivations: 1,
-      });
+      prismaMock.deviceActivation.delete.mockResolvedValue({} as any);
       prismaMock.licenseValidation.create.mockResolvedValue({} as any);
 
       await LicenseService.deactivateLicense(

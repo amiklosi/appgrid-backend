@@ -63,7 +63,6 @@ export const LicenseResponseSchema = Type.Object({
   activatedAt: Type.Union([Type.String(), Type.Null()]),
   revokedAt: Type.Union([Type.String(), Type.Null()]),
   maxActivations: Type.Integer(),
-  currentActivations: Type.Integer(),
   metadata: Type.Union([Type.Record(Type.String(), Type.Any()), Type.Null()]),
   notes: Type.Union([Type.String(), Type.Null()]),
   createdAt: Type.String(),

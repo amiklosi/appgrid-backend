@@ -4,6 +4,8 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { prisma } from './lib/prisma';
+import { ConfigValidator } from './lib/config-validator';
+import { BackgroundJobsService } from './services/background-jobs.service';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -27,6 +29,12 @@ export async function buildApp(): Promise<FastifyInstance> {
     },
   });
 
+  // Validate configuration at startup
+  const configResult = ConfigValidator.logValidation(fastify.log);
+  if (!configResult.valid) {
+    throw new Error('Configuration validation failed - server cannot start. Check logs for details.');
+  }
+
   // Register plugins
   // CORS
   await fastify.register(cors, {
@@ -48,7 +56,6 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Health check
   fastify.get('/health', async (request, reply) => {
     return {
-      cica: 'malac',
       status: 'ok',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
@@ -59,12 +66,19 @@ export async function buildApp(): Promise<FastifyInstance> {
   fastify.get('/', async (request, reply) => {
     return {
       name: 'AppGrid License Server',
-      version: '1.0.0',
+      version: '2.0.0',
+      resilience: 'enabled',
       endpoints: {
         health: '/health',
         licenses: '/api/licenses',
         emailTest: '/api/email/test',
         revenuecatMigrate: '/api/revenuecat/migrate',
+        paddleWebhook: '/api/paddle/webhook',
+        admin: {
+          emailQueueStats: '/api/admin/email-queue/stats',
+          emailQueueProcess: '/api/admin/email-queue/process',
+          webhookStats: '/api/admin/webhooks/stats',
+        },
       },
     };
   });
@@ -73,20 +87,38 @@ export async function buildApp(): Promise<FastifyInstance> {
   await fastify.register(import('./routes/licenses'), { prefix: '/api' });
   await fastify.register(import('./routes/email'), { prefix: '/api' });
   await fastify.register(import('./routes/revenuecat'), { prefix: '/api' });
+  await fastify.register(import('./routes/admin'), { prefix: '/api' });
+  await fastify.register(import('./routes/paddle'), { prefix: '/api' });
 
   return fastify;
 }
 
 // Start server
 async function start() {
+  let backgroundJobs: BackgroundJobsService | null = null;
+
   try {
     const app = await buildApp();
+
+    // Start background jobs
+    backgroundJobs = new BackgroundJobsService(app.log);
+    backgroundJobs.start();
 
     // Graceful shutdown
     const closeGracefully = async (signal: string) => {
       app.log.info(`Received ${signal}, closing server gracefully...`);
+
+      // Stop background jobs first
+      if (backgroundJobs) {
+        backgroundJobs.stop();
+      }
+
+      // Close database connection
       await prisma.$disconnect();
+
+      // Close server
       await app.close();
+
       process.exit(0);
     };
 
@@ -99,8 +131,10 @@ async function start() {
     app.log.info(`🚀 License key server running on port ${PORT}`);
     app.log.info(`🏥 Health check: http://localhost:${PORT}/health`);
     app.log.info(`📚 API docs: http://localhost:${PORT}/`);
+    app.log.info(`🔐 Resilient webhook processing enabled`);
+    app.log.info(`📧 Email queue background processor running`);
   } catch (err) {
-    console.error(err);
+    console.error('Failed to start server:', err);
     process.exit(1);
   }
 }

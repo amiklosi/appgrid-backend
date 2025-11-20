@@ -26,11 +26,14 @@ export class LicenseService {
 
   /**
    * Create a new license
+   * @param data License creation data
+   * @param tx Optional Prisma transaction client for atomic operations
    */
-  static async createLicense(data: CreateLicenseDTO) {
+  static async createLicense(data: CreateLicenseDTO, tx?: any) {
     const licenseKey = this.generateLicenseKey();
+    const client = tx || prisma;
 
-    const license = await prisma.license.create({
+    const license = await client.license.create({
       data: {
         userId: data.userId,
         licenseKey,
@@ -66,6 +69,7 @@ export class LicenseService {
       where: { licenseKey },
       include: {
         user: true,
+        deviceActivations: true,
       },
     });
 
@@ -85,21 +89,57 @@ export class LicenseService {
         where: { id: license.id },
         data: { status: 'EXPIRED' },
       });
-    } else if (license.currentActivations >= license.maxActivations) {
-      message = 'Maximum activations reached';
     } else {
-      isValid = true;
-      message = 'License is valid';
+      // Check device-level activation if fingerprint provided
+      if (deviceFingerprint) {
+        // Check if this device is already activated
+        const existingActivation = license.deviceActivations.find(
+          (d) => d.deviceFingerprint === deviceFingerprint
+        );
 
-      // Increment activation count on first use
-      if (license.currentActivations === 0) {
-        await prisma.license.update({
-          where: { id: license.id },
-          data: {
-            currentActivations: { increment: 1 },
-            activatedAt: new Date(),
-          },
-        });
+        if (existingActivation) {
+          // Device already activated - update last seen
+          await prisma.deviceActivation.update({
+            where: { id: existingActivation.id },
+            data: { lastSeenAt: new Date() },
+          });
+          isValid = true;
+          message = 'License is valid';
+        } else {
+          // New device - check if we can add it
+          const activeDeviceCount = license.deviceActivations.length;
+
+          if (activeDeviceCount >= license.maxActivations) {
+            message = 'Maximum activations reached';
+          } else {
+            // Activate new device
+            await prisma.deviceActivation.create({
+              data: {
+                licenseId: license.id,
+                deviceFingerprint,
+                ipAddress,
+                userAgent,
+              },
+            });
+
+            // Update license first activation timestamp if needed
+            if (!license.activatedAt) {
+              await prisma.license.update({
+                where: { id: license.id },
+                data: {
+                  activatedAt: new Date(),
+                },
+              });
+            }
+
+            isValid = true;
+            message = 'License is valid';
+          }
+        }
+      } else {
+        // No device fingerprint - just validate the license itself
+        isValid = true;
+        message = 'License is valid (no device tracking)';
       }
     }
 
@@ -127,7 +167,7 @@ export class LicenseService {
   }
 
   /**
-   * Deactivate a license (decrement activation count)
+   * Deactivate a license (remove device activation)
    */
   static async deactivateLicense(
     licenseKey: string,
@@ -139,6 +179,7 @@ export class LicenseService {
       where: { licenseKey },
       include: {
         user: true,
+        deviceActivations: true,
       },
     });
 
@@ -147,19 +188,25 @@ export class LicenseService {
 
     if (!license) {
       message = 'License key not found';
-    } else if (license.currentActivations <= 0) {
-      message = 'No active activations to deactivate';
+    } else if (!deviceFingerprint) {
+      message = 'Device fingerprint required for deactivation';
     } else {
-      // Decrement activation count
-      await prisma.license.update({
-        where: { id: license.id },
-        data: {
-          currentActivations: { decrement: 1 },
-        },
-      });
+      // Find the device activation
+      const deviceActivation = license.deviceActivations.find(
+        (d) => d.deviceFingerprint === deviceFingerprint
+      );
 
-      success = true;
-      message = 'License deactivated successfully';
+      if (!deviceActivation) {
+        message = 'Device not activated for this license';
+      } else {
+        // Remove device activation
+        await prisma.deviceActivation.delete({
+          where: { id: deviceActivation.id },
+        });
+
+        success = true;
+        message = 'License deactivated successfully';
+      }
     }
 
     // Log deactivation attempt
@@ -178,11 +225,12 @@ export class LicenseService {
         // Ignore validation logging errors if license doesn't exist
       });
 
+    const newCount = success && license ? license.deviceActivations.length - 1 : license?.deviceActivations?.length || 0;
+
     return {
       success,
       message,
-      currentActivations:
-        success && license ? license.currentActivations - 1 : license?.currentActivations,
+      currentActivations: newCount,
     };
   }
 

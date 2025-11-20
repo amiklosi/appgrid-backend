@@ -70,6 +70,7 @@ describe('RevenueCat Migration Routes', () => {
         email: validRequest.email,
         name: null,
         company: null,
+        marketingConsent: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -153,6 +154,7 @@ describe('RevenueCat Migration Routes', () => {
         email: validRequest.email,
         name: 'Test User',
         company: null,
+        marketingConsent: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -387,6 +389,7 @@ describe('RevenueCat Migration Routes', () => {
         email: validRequest.email,
         name: null,
         company: null,
+        marketingConsent: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -484,6 +487,7 @@ describe('RevenueCat Migration Routes', () => {
         email: validRequest.email,
         name: null,
         company: null,
+        marketingConsent: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -497,7 +501,6 @@ describe('RevenueCat Migration Routes', () => {
         activatedAt: null,
         revokedAt: null,
         maxActivations: 5,
-        currentActivations: 0,
         metadata: null,
         notes: null,
         createdAt: new Date(),

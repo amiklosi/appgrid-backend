@@ -35,6 +35,7 @@
     "@fastify/cors": "^11.1.0",
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",
+    "@paddle/paddle-node-sdk": "^3.4.0",
     "@prisma/client": "^6.19.0",
     "@sinclair/typebox": "^0.34.41",
     "@types/pg": "^8.15.5",
