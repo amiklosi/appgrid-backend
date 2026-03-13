@@ -1,0 +1,36 @@
+name: Production Health Check
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check production health
+        id: check
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://appgrid.zekalogic.com/health)
+          echo "http_code=${HTTP_CODE}" >> $GITHUB_OUTPUT
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "down=true" >> $GITHUB_OUTPUT
+          else
+            echo "down=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send alert email
+        if: steps.check.outputs.down == 'true'
+        env:
+          MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
+        run: |
+          HTTP_CODE="${{ steps.check.outputs.http_code }}"
+          BODY="Health check failed at $(date -u). Status code: ${HTTP_CODE}. URL: https://appgrid.zekalogic.com/health"
+          curl -s -X POST https://api.eu.mailgun.net/v3/mg.zekalogic.com/messages \
+            -u "api:${MAILGUN_API_KEY}" \
+            -F "from=AppGrid Monitor <monitor@mg.zekalogic.com>" \
+            -F "to=zekalogic@gmail.com" \
+            -F "subject=appgrid.zekalogic.com is DOWN" \
+            -F "text=${BODY}"
