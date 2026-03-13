@@ -53,9 +53,9 @@ jobs:
 
       - name: Deploy to Portainer
         env:
-          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_URL: ${{ vars.PORTAINER_URL }}
           PORTAINER_ACCESS_TOKEN: ${{ secrets.PORTAINER_ACCESS_TOKEN }}
-          PORTAINER_STACK_NAME: ${{ secrets.PORTAINER_STACK_NAME }}
+          PORTAINER_STACK_NAME: ${{ vars.PORTAINER_STACK_NAME }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           MAILGUN_API_KEY: ${{ secrets.MAILGUN_API_KEY }}
           MAILGUN_DOMAIN: ${{ secrets.MAILGUN_DOMAIN }}
@@ -136,9 +136,9 @@ jobs:
 
       - name: Verify deployment
         env:
-          PORTAINER_URL: ${{ secrets.PORTAINER_URL }}
+          PORTAINER_URL: ${{ vars.PORTAINER_URL }}
           PORTAINER_ACCESS_TOKEN: ${{ secrets.PORTAINER_ACCESS_TOKEN }}
-          PORTAINER_STACK_NAME: ${{ secrets.PORTAINER_STACK_NAME }}
+          PORTAINER_STACK_NAME: ${{ vars.PORTAINER_STACK_NAME }}
         run: |
           echo "Waiting for services to be healthy..."
           sleep 30
