@@ -13,7 +13,7 @@ jobs:
       - name: Check production health
         id: check
         run: |
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://appgrid.zekalogic.com/health)
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 https://appgrid.zekalogic.com/health || echo "000")
           echo "http_code=${HTTP_CODE}" >> $GITHUB_OUTPUT
           if [ "$HTTP_CODE" != "200" ]; then
             echo "down=true" >> $GITHUB_OUTPUT
