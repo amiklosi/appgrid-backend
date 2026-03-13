@@ -75,7 +75,30 @@ jobs:
             "${PORTAINER_URL}/api/stacks" | \
             jq -r ".[] | select(.Name==\"${PORTAINER_STACK_NAME}\") | .Id")
 
-          COMPOSE_CONTENT=$(cat docker-compose.prod.yml)
+          # Build env array and payload as a file to avoid heredoc issues
+          jq -n \
+            --arg name "${PORTAINER_STACK_NAME}" \
+            --rawfile compose docker-compose.prod.yml \
+            --arg pg "${POSTGRES_PASSWORD}" \
+            --arg mgKey "${MAILGUN_API_KEY}" \
+            --arg mgDomain "${MAILGUN_DOMAIN}" \
+            --arg rcKey "${REVENUECAT_API_KEY}" \
+            --arg rcProject "${REVENUECAT_PROJECT_ID}" \
+            --arg paddleKey "${PADDLE_API_KEY}" \
+            --arg paddleSecret "${PADDLE_WEBHOOK_SECRET}" \
+            '{
+              name: $name,
+              stackFileContent: $compose,
+              env: [
+                {name: "POSTGRES_PASSWORD", value: $pg},
+                {name: "MAILGUN_API_KEY", value: $mgKey},
+                {name: "MAILGUN_DOMAIN", value: $mgDomain},
+                {name: "REVENUECAT_API_KEY", value: $rcKey},
+                {name: "REVENUECAT_PROJECT_ID", value: $rcProject},
+                {name: "PADDLE_API_KEY", value: $paddleKey},
+                {name: "PADDLE_WEBHOOK_SECRET", value: $paddleSecret}
+              ]
+            }' > /tmp/stack-payload.json
 
           if [ -z "$STACK_ID" ]; then
             echo "Creating new stack: ${PORTAINER_STACK_NAME}"
@@ -83,45 +106,19 @@ jobs:
             curl -X POST "${PORTAINER_URL}/api/stacks/create/standalone/string?endpointId=${ENDPOINT_ID}" \
               -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
               -H "Content-Type: application/json" \
-              -d @- <<EOF
-          {
-            "name": "${PORTAINER_STACK_NAME}",
-            "stackFileContent": $(echo "$COMPOSE_CONTENT" | jq -Rs .),
-            "env": [
-              {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
-              {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
-              {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
-              {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
-              {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"},
-              {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
-              {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"}
-            ]
-          }
-          EOF
+              -d @/tmp/stack-payload.json
 
             echo "Stack created successfully"
           else
             echo "Updating existing stack: ${PORTAINER_STACK_NAME} (ID: ${STACK_ID})"
 
+            # Add update-specific fields
+            jq '. + {prune: false, pullImage: true} | del(.name)' /tmp/stack-payload.json > /tmp/stack-update.json
+
             curl -X PUT "${PORTAINER_URL}/api/stacks/${STACK_ID}?endpointId=${ENDPOINT_ID}" \
               -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
               -H "Content-Type: application/json" \
-              -d @- <<EOF
-          {
-            "stackFileContent": $(echo "$COMPOSE_CONTENT" | jq -Rs .),
-            "env": [
-              {"name": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}"},
-              {"name": "MAILGUN_API_KEY", "value": "${MAILGUN_API_KEY}"},
-              {"name": "MAILGUN_DOMAIN", "value": "${MAILGUN_DOMAIN}"},
-              {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
-              {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"},
-              {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
-              {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"}
-            ],
-            "prune": false,
-            "pullImage": true
-          }
-          EOF
+              -d @/tmp/stack-update.json
 
             echo "Stack updated successfully"
           fi
