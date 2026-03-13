@@ -32,7 +32,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Validate configuration at startup
   const configResult = ConfigValidator.logValidation(fastify.log);
   if (!configResult.valid) {
-    throw new Error('Configuration validation failed - server cannot start. Check logs for details.');
+    throw new Error(
+      'Configuration validation failed - server cannot start. Check logs for details.'
+    );
   }
 
   // Register plugins
@@ -67,27 +69,18 @@ export async function buildApp(): Promise<FastifyInstance> {
     return {
       name: 'AppGrid License Server',
       version: '2.0.0',
-      resilience: 'enabled',
       endpoints: {
         health: '/health',
-        licenses: '/api/licenses',
-        emailTest: '/api/email/test',
-        revenuecatMigrate: '/api/revenuecat/migrate',
+        licenseValidate: '/api/licenses/validate',
+        licenseCheck: '/api/licenses/check',
+        licenseDeactivate: '/api/licenses/deactivate',
         paddleWebhook: '/api/paddle/webhook',
-        admin: {
-          emailQueueStats: '/api/admin/email-queue/stats',
-          emailQueueProcess: '/api/admin/email-queue/process',
-          webhookStats: '/api/admin/webhooks/stats',
-        },
       },
     };
   });
 
   // Import and register API routes
   await fastify.register(import('./routes/licenses'), { prefix: '/api' });
-  await fastify.register(import('./routes/email'), { prefix: '/api' });
-  await fastify.register(import('./routes/revenuecat'), { prefix: '/api' });
-  await fastify.register(import('./routes/admin'), { prefix: '/api' });
   await fastify.register(import('./routes/paddle'), { prefix: '/api' });
 
   return fastify;

@@ -274,6 +274,91 @@ Permanently delete a license and all its validation records.
 
 ---
 
+### Migrate RevenueCat User
+
+```http
+POST /api/revenuecat/migrate
+```
+
+Migrate a RevenueCat user to the license system. This endpoint checks the user's RevenueCat subscription status and creates a license key if they have an eligible subscription (lifetime or annual).
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "userId": "$RCAnonymousID:xxxxx"
+}
+```
+
+**Parameters:**
+- `email` (required): User's email address
+- `userId` (required): RevenueCat user ID (e.g., `$RCAnonymousID:xxxxx`)
+
+**Response 200 - Successfully Migrated:**
+```json
+{
+  "success": true,
+  "message": "Migration successful",
+  "licenseKey": "ABCD-EFGH-IJKL-MNOP",
+  "email": "user@example.com"
+}
+```
+
+**Response 200 - Already Migrated:**
+```json
+{
+  "success": false,
+  "message": "User has already been migrated",
+  "previousMigration": {
+    "email": "user@example.com",
+    "migratedAt": "2025-01-10T12:00:00.000Z"
+  }
+}
+```
+
+**Response 400 - Not Eligible:**
+```json
+{
+  "success": false,
+  "message": "User is not eligible for migration. Only lifetime or annual subscriptions qualify."
+}
+```
+
+**Response 404 - User Not Found:**
+```json
+{
+  "success": false,
+  "message": "RevenueCat user not found"
+}
+```
+
+**Migration Behavior:**
+1. Checks if the RevenueCat user has already been migrated
+2. Fetches the user's subscription data from RevenueCat API
+3. Validates eligibility (must have lifetime or annual subscription)
+4. Creates a new user in the system if the email doesn't exist
+5. Generates a license key with 5 device activations
+6. Sends an email to the user with their license key
+7. Stores the migration record to prevent duplicate migrations
+
+**Required Environment Variables:**
+- `REVENUECAT_API_KEY`: RevenueCat API key for API access
+- `REVENUECAT_PROJECT_ID`: RevenueCat project identifier
+- `MAILGUN_API_KEY`: Mailgun API key for sending emails
+- `MAILGUN_DOMAIN`: Mailgun domain for sending emails
+
+**Example:**
+```bash
+curl -X POST http://localhost:3000/api/revenuecat/migrate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "userId": "$RCAnonymousID:abc123xyz"
+  }'
+```
+
+---
+
 ## Status Values
 
 | Status | Description |
