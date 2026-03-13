@@ -2,7 +2,7 @@ services:
   app:
     image: ghcr.io/amiklosi/appgrid-backend:latest
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -24,7 +24,7 @@ services:
       - appgrid-network
       - nginx-proxy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/health"]
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:3000/health']
       interval: 30s
       timeout: 10s
       retries: 5
@@ -36,15 +36,13 @@ services:
       - POSTGRES_DB=appgrid_db
       - POSTGRES_USER=appgrid_user
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     networks:
       - appgrid-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U appgrid_user -d appgrid_db"]
+      test: ['CMD-SHELL', 'pg_isready -U appgrid_user -d appgrid_db']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,7 +51,7 @@ services:
   adminer:
     image: adminer:4-standalone
     ports:
-      - "8080:8080"
+      - '8080:8080'
     environment:
       - ADMINER_DEFAULT_SERVER=db
       - ADMINER_DESIGN=nette
