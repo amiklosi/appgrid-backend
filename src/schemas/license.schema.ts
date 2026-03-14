@@ -48,7 +48,6 @@ export type DeactivateLicenseDTO = Static<typeof DeactivateLicenseSchema>;
 export const DeactivationResponseSchema = Type.Object({
   success: Type.Boolean(),
   message: Type.String(),
-  currentActivations: Type.Optional(Type.Integer()),
 });
 
 // Update license request
@@ -78,9 +77,15 @@ export const LicenseResponseSchema = Type.Object({
   updatedAt: Type.String(),
 });
 
+// Slim license info returned to clients
+export const LicensePublicSchema = Type.Object({
+  status: LicenseStatusSchema,
+  expiresAt: Type.Union([Type.String(), Type.Null()]),
+});
+
 // Validation response
 export const ValidationResponseSchema = Type.Object({
   valid: Type.Boolean(),
-  license: Type.Optional(LicenseResponseSchema),
   message: Type.String(),
+  license: Type.Optional(LicensePublicSchema),
 });
