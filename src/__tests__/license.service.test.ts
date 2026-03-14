@@ -384,7 +384,7 @@ describe('LicenseService', () => {
       const result = await LicenseService.checkLicense(licenseKey);
 
       expect(result.valid).toBe(true);
-      expect(result.message).toBe('License is valid (no device tracking)');
+      expect(result.message).toBe('License is valid');
       expect(result.license).toEqual(mockLicense);
     });
 
