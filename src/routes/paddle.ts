@@ -46,7 +46,7 @@ const paddleRoutes: FastifyPluginAsync = async (fastify) => {
         .digest('hex');
 
       if (expectedSignature !== providedSignature) {
-        fastify.log.warn({ providedSignature, expectedSignature }, 'Invalid webhook signature');
+        fastify.log.warn('Invalid webhook signature');
         throw new WebhookError('Invalid signature', false, 401);
       }
 
@@ -120,7 +120,10 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
       const customerId = data.customer_id;
       const status = data.status;
 
-      fastify.log.info({ transactionId, customerId, status }, 'Processing transaction.completed event');
+      fastify.log.info(
+        { transactionId, customerId, status },
+        'Processing transaction.completed event'
+      );
 
       // Business logic validation
       if (status !== 'completed') {
@@ -146,7 +149,7 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
 
         if (existingPurchase) {
           fastify.log.info(
-            { transactionId, licenseKey: existingPurchase.license.licenseKey },
+            { transactionId },
             'Transaction already processed (in transaction check)'
           );
           return {
@@ -174,19 +177,13 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
               marketingConsent: customerDetails.marketingConsent,
             },
           });
-          fastify.log.info(
-            { userId: user.id, email: customerDetails.email, marketingConsent: customerDetails.marketingConsent },
-            'Created new user'
-          );
+          fastify.log.info({ userId: user.id, transactionId }, 'Created new user');
         } else if (user.marketingConsent !== customerDetails.marketingConsent) {
           user = await tx.user.update({
             where: { id: user.id },
             data: { marketingConsent: customerDetails.marketingConsent },
           });
-          fastify.log.info(
-            { userId: user.id, email: customerDetails.email, marketingConsent: customerDetails.marketingConsent },
-            'Updated user marketing consent'
-          );
+          fastify.log.info({ userId: user.id, transactionId }, 'Updated user marketing consent');
         }
 
         // Create license
@@ -205,8 +202,6 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
           },
           tx
         );
-
-        fastify.log.info({ transactionId, email: customerDetails.email, licenseKey: license.licenseKey }, 'Created new license');
 
         // Create purchase record
         await tx.paddlePurchase.create({
@@ -260,12 +255,12 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
             },
           });
 
-          fastify.log.info({ transactionId, email: result.email }, 'Email queued for delivery');
+          fastify.log.info({ transactionId }, 'Email queued for delivery');
         } catch (emailError: any) {
           // Email queueing failed, but purchase succeeded
           // Log error but don't fail the webhook
           fastify.log.error(
-            { transactionId, email: result.email, error: emailError.message },
+            { transactionId, error: emailError.message },
             'Failed to queue email, but purchase succeeded'
           );
         }
@@ -305,7 +300,10 @@ async function handleAdjustmentUpdated(fastify: any, payload: any, data: any) {
       const adjustmentStatus = data.status;
       const action = data.action;
 
-      fastify.log.info({ adjustmentId, transactionId, adjustmentStatus, action }, 'Received adjustment.updated event');
+      fastify.log.info(
+        { adjustmentId, transactionId, adjustmentStatus, action },
+        'Received adjustment.updated event'
+      );
 
       // Only process approved refunds
       if (adjustmentStatus !== 'approved' || action !== 'refund') {
@@ -320,12 +318,18 @@ async function handleAdjustmentUpdated(fastify: any, payload: any, data: any) {
         });
 
         if (!purchase) {
-          fastify.log.warn({ adjustmentId, transactionId }, 'Refund received but no purchase found');
+          fastify.log.warn(
+            { adjustmentId, transactionId },
+            'Refund received but no purchase found'
+          );
           return { success: true, message: 'No purchase found for refund' };
         }
 
         if (purchase.license.status === 'REVOKED') {
-          fastify.log.info({ adjustmentId, transactionId, licenseId: purchase.license.id }, 'License already revoked');
+          fastify.log.info(
+            { adjustmentId, transactionId, licenseId: purchase.license.id },
+            'License already revoked'
+          );
           return { success: true, message: 'License already revoked' };
         }
 
@@ -344,8 +348,6 @@ async function handleAdjustmentUpdated(fastify: any, payload: any, data: any) {
             adjustmentId,
             transactionId,
             licenseId: purchase.license.id,
-            licenseKey: purchase.license.licenseKey,
-            userEmail: purchase.user.email,
           },
           'License revoked due to refund'
         );
@@ -370,7 +372,12 @@ async function handleAdjustmentUpdated(fastify: any, payload: any, data: any) {
 /**
  * Fetch customer details from Paddle API with error handling and retry
  */
-async function fetchPaddleCustomer(fastify: any, customerId: string, transactionId: string, transactionData: any) {
+async function fetchPaddleCustomer(
+  fastify: any,
+  customerId: string,
+  transactionId: string,
+  transactionData: any
+) {
   const paddleApiKey = process.env.PADDLE_API_KEY;
   if (!paddleApiKey) {
     fastify.log.error('PADDLE_API_KEY not configured');
@@ -414,7 +421,10 @@ async function fetchPaddleCustomer(fastify: any, customerId: string, transaction
         const marketingConsent = customerData.data?.marketing_consent || false;
 
         if (!customerEmail) {
-          fastify.log.error({ transactionId, customerId, customerData }, 'No email in customer data');
+          fastify.log.error(
+            { transactionId, customerId, customerData },
+            'No email in customer data'
+          );
           throw new WebhookError('Customer email not found', false, 400);
         }
 
@@ -422,18 +432,7 @@ async function fetchPaddleCustomer(fastify: any, customerId: string, transaction
         const cardholderName = transactionData.payments?.[0]?.method_details?.card?.cardholder_name;
         const finalName = customerName || cardholderName || null;
 
-        fastify.log.info(
-          {
-            transactionId,
-            customerId,
-            customerEmail,
-            customerName,
-            cardholderName,
-            finalName,
-            marketingConsent
-          },
-          'Fetched customer details from Paddle'
-        );
+        fastify.log.info({ transactionId, customerId }, 'Fetched customer details from Paddle');
 
         return {
           email: customerEmail,
