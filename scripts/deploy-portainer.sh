@@ -99,6 +99,16 @@ if [ -z "$PADDLE_WEBHOOK_SECRET" ]; then
     exit 1
 fi
 
+if [ -z "$AXIOM_TOKEN" ]; then
+    print_error "AXIOM_TOKEN not set in .env"
+    exit 1
+fi
+
+if [ -z "$AXIOM_DATASET" ]; then
+    print_error "AXIOM_DATASET not set in .env"
+    exit 1
+fi
+
 print_status "🚀 Starting Portainer deployment..."
 print_status "Portainer URL: ${PORTAINER_URL}"
 print_status "Stack Name: ${PORTAINER_STACK_NAME}"
@@ -150,7 +160,9 @@ if [ -z "$STACK_ID" ]; then
     {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
     {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"},
     {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
-    {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"}
+    {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"},
+    {"name": "AXIOM_TOKEN", "value": "${AXIOM_TOKEN}"},
+    {"name": "AXIOM_DATASET", "value": "${AXIOM_DATASET}"}
   ]
 }
 EOF
@@ -181,7 +193,9 @@ else
     {"name": "REVENUECAT_API_KEY", "value": "${REVENUECAT_API_KEY}"},
     {"name": "REVENUECAT_PROJECT_ID", "value": "${REVENUECAT_PROJECT_ID}"},
     {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
-    {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"}
+    {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"},
+    {"name": "AXIOM_TOKEN", "value": "${AXIOM_TOKEN}"},
+    {"name": "AXIOM_DATASET", "value": "${AXIOM_DATASET}"}
   ],
   "prune": false,
   "pullImage": true
