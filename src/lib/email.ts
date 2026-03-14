@@ -1,6 +1,6 @@
 import Handlebars from 'handlebars';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, readdirSync } from 'fs';
+import { join, basename } from 'path';
 import formData from 'form-data';
 import Mailgun from 'mailgun.js';
 
@@ -23,6 +23,8 @@ class EmailService {
   private domain: string | null = null;
 
   constructor() {
+    this.registerPartials();
+
     const mailgunApiKey = process.env.MAILGUN_API_KEY;
     const mailgunDomain = process.env.MAILGUN_DOMAIN;
 
@@ -34,6 +36,20 @@ class EmailService {
         url: 'https://api.eu.mailgun.net',
       });
       this.domain = mailgunDomain;
+    }
+  }
+
+  private registerPartials(): void {
+    const partialsPath = join(this.templatesPath, 'partials');
+    const files = readdirSync(partialsPath);
+    for (const file of files) {
+      const content = readFileSync(join(partialsPath, file), 'utf-8');
+      // "license-validity.html.hbs" -> "license-validity-html"
+      // "license-validity.hbs"      -> "license-validity"
+      const name = basename(file)
+        .replace(/\.html\.hbs$/, '-html')
+        .replace(/\.hbs$/, '');
+      Handlebars.registerPartial(name, content);
     }
   }
 
@@ -180,7 +196,10 @@ class EmailService {
   /**
    * Render a template and return the rendered content
    */
-  renderTemplateForQueue(templateName: string, data: any): { subject: string; text: string; html: string } {
+  renderTemplateForQueue(
+    templateName: string,
+    data: any
+  ): { subject: string; text: string; html: string } {
     return this.renderTemplate(templateName, data);
   }
 
@@ -203,19 +222,13 @@ class EmailService {
     }
 
     try {
-      const contextText = context
-        ? '\n\nContext:\n' + JSON.stringify(context, null, 2)
-        : '';
+      const contextText = context ? '\n\nContext:\n' + JSON.stringify(context, null, 2) : '';
 
       const text = `${message}${contextText}`;
       const html = `
         <h2>⚠️ System Alert</h2>
         <p>${message.replace(/\n/g, '<br>')}</p>
-        ${
-          context
-            ? `<h3>Context:</h3><pre>${JSON.stringify(context, null, 2)}</pre>`
-            : ''
-        }
+        ${context ? `<h3>Context:</h3><pre>${JSON.stringify(context, null, 2)}</pre>` : ''}
       `;
 
       const messageData = {
