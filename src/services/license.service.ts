@@ -59,10 +59,7 @@ export class LicenseService {
   /**
    * Check a license key (read-only, no activation or updates)
    */
-  static async checkLicense(
-    licenseKey: string,
-    deviceFingerprint?: string
-  ) {
+  static async checkLicense(licenseKey: string, deviceFingerprint?: string) {
     const license = await prisma.license.findUnique({
       where: { licenseKey },
       include: {
@@ -101,7 +98,7 @@ export class LicenseService {
       } else {
         // No device fingerprint - just validate the license itself
         isValid = true;
-        message = 'License is valid (no device tracking)';
+        message = 'License is valid';
       }
     }
 
@@ -197,7 +194,7 @@ export class LicenseService {
       } else {
         // No device fingerprint - just validate the license itself
         isValid = true;
-        message = 'License is valid (no device tracking)';
+        message = 'License is valid';
       }
     }
 
@@ -283,7 +280,10 @@ export class LicenseService {
         // Ignore validation logging errors if license doesn't exist
       });
 
-    const newCount = success && license ? license.deviceActivations.length - 1 : license?.deviceActivations?.length || 0;
+    const newCount =
+      success && license
+        ? license.deviceActivations.length - 1
+        : license?.deviceActivations?.length || 0;
 
     return {
       success,
