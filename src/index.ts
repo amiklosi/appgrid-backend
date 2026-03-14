@@ -13,9 +13,12 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // Build Fastify app (exported for testing)
 export async function buildApp(): Promise<FastifyInstance> {
+  const axiomToken = process.env.AXIOM_TOKEN;
+  const axiomDataset = process.env.AXIOM_DATASET;
+
   const fastify = Fastify({
     logger: {
-      level: NODE_ENV === 'development' ? 'info' : 'warn',
+      level: 'info',
       transport:
         NODE_ENV === 'development'
           ? {
@@ -25,7 +28,25 @@ export async function buildApp(): Promise<FastifyInstance> {
                 ignore: 'pid,hostname',
               },
             }
-          : undefined,
+          : axiomToken && axiomDataset
+            ? {
+                targets: [
+                  {
+                    target: '@axiomhq/pino',
+                    options: {
+                      token: axiomToken,
+                      dataset: axiomDataset,
+                    },
+                    level: 'info',
+                  },
+                  {
+                    target: 'pino/file',
+                    options: { destination: 1 }, // stdout
+                    level: 'info',
+                  },
+                ],
+              }
+            : undefined,
     },
   });
 

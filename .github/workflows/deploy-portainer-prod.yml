@@ -83,6 +83,8 @@ jobs:
           REVENUECAT_PROJECT_ID: ${{ secrets.REVENUECAT_PROJECT_ID }}
           PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY }}
           PADDLE_WEBHOOK_SECRET: ${{ secrets.PADDLE_WEBHOOK_SECRET }}
+          AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
+          AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
         run: |
           # Get Portainer endpoint ID
           ENDPOINT_ID=$(curl -s -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
@@ -106,6 +108,8 @@ jobs:
             --arg rcProject "${REVENUECAT_PROJECT_ID}" \
             --arg paddleKey "${PADDLE_API_KEY}" \
             --arg paddleSecret "${PADDLE_WEBHOOK_SECRET}" \
+            --arg axiomToken "${AXIOM_TOKEN}" \
+            --arg axiomDataset "${AXIOM_DATASET}" \
             '{
               name: $name,
               stackFileContent: $compose,
@@ -116,7 +120,9 @@ jobs:
                 {name: "REVENUECAT_API_KEY", value: $rcKey},
                 {name: "REVENUECAT_PROJECT_ID", value: $rcProject},
                 {name: "PADDLE_API_KEY", value: $paddleKey},
-                {name: "PADDLE_WEBHOOK_SECRET", value: $paddleSecret}
+                {name: "PADDLE_WEBHOOK_SECRET", value: $paddleSecret},
+                {name: "AXIOM_TOKEN", value: $axiomToken},
+                {name: "AXIOM_DATASET", value: $axiomDataset}
               ]
             }' > /tmp/stack-payload.json
 

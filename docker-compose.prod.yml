@@ -14,6 +14,8 @@ services:
       - REVENUECAT_PROJECT_ID=${REVENUECAT_PROJECT_ID}
       - PADDLE_API_KEY=${PADDLE_API_KEY}
       - PADDLE_WEBHOOK_SECRET=${PADDLE_WEBHOOK_SECRET}
+      - AXIOM_TOKEN=${AXIOM_TOKEN}
+      - AXIOM_DATASET=${AXIOM_DATASET}
     depends_on:
       db:
         condition: service_healthy
