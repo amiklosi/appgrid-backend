@@ -11,6 +11,8 @@ import {
 // License key format: XXXX-XXXX-XXXX-XXXX (alphanumeric, uppercase)
 const LICENSE_KEY_REGEX = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 
+const maskKey = (key: string) => `${key.slice(0, 4)}-****-****-****`;
+
 const RATE_LIMIT = {
   max: 10,
   timeWindow: '1 minute',
@@ -48,6 +50,10 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
         deviceName
       );
 
+      request.log.info(
+        { key: maskKey(licenseKey), valid: result.valid, ip: request.ip },
+        'license validate'
+      );
       return reply.send(result);
     }
   );
@@ -73,6 +79,10 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
 
       const result = await LicenseService.checkLicense(licenseKey, deviceFingerprint);
 
+      request.log.info(
+        { key: maskKey(licenseKey), valid: result.valid, ip: request.ip },
+        'license check'
+      );
       return reply.send(result);
     }
   );
@@ -103,6 +113,10 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
         request.headers['user-agent']
       );
 
+      request.log.info(
+        { key: maskKey(licenseKey), success: result.success, ip: request.ip },
+        'license deactivate'
+      );
       return reply.send(result);
     }
   );
