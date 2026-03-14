@@ -103,6 +103,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // Import and register API routes
   await fastify.register(import('./routes/licenses'), { prefix: '/api' });
   await fastify.register(import('./routes/paddle'), { prefix: '/api' });
+  await fastify.register(import('./routes/revenuecat'), { prefix: '/api' });
 
   return fastify;
 }
