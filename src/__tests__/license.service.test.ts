@@ -7,6 +7,10 @@ describe('LicenseService', () => {
     // Reset is handled by setup.ts
   });
 
+  it('INTENTIONAL FAILING TEST - remove me', () => {
+    expect(true).toBe(false);
+  });
+
   describe('generateLicenseKey', () => {
     it('should generate a license key in format XXXX-XXXX-XXXX-XXXX', () => {
       const key = LicenseService.generateLicenseKey();
