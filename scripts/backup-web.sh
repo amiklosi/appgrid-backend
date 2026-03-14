@@ -19,6 +19,7 @@ echo "[INFO] Creating tar of ~/web..."
 tar -czf "$BACKUP_DIR/$BACKUP_FILE" \
     --exclude="web/nginx-proxy/volumes/nginx/certs" \
     --exclude="web/nginx-proxy/volumes/nginx/acme" \
+    --exclude="web/nginx-proxy/volumes/nginx/conf.d" \
     --warning=no-file-changed \
     -C "$HOME" web || [ $? -eq 1 ]
 
