@@ -75,30 +75,15 @@ export async function buildApp(): Promise<FastifyInstance> {
     timeWindow: '1 minute',
   });
 
-  // Register routes
-  // Health check
-  fastify.get('/health', async (request, reply) => {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-    };
-  });
-
-  // API info
-  fastify.get('/', async (request, reply) => {
-    return {
-      name: 'AppGrid License Server',
-      version: '2.0.0',
-      endpoints: {
-        health: '/health',
-        licenseValidate: '/api/licenses/validate',
-        licenseCheck: '/api/licenses/check',
-        licenseDeactivate: '/api/licenses/deactivate',
-        paddleWebhook: '/api/paddle/webhook',
-      },
-    };
-  });
+   // Register routes
+   // Health check
+   fastify.get('/health', async (request, reply) => {
+     return {
+       status: 'ok',
+       timestamp: new Date().toISOString(),
+       uptime: process.uptime(),
+     };
+   });
 
   // Import and register API routes
   await fastify.register(import('./routes/licenses'), { prefix: '/api' });
