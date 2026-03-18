@@ -77,7 +77,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
    // Register routes
    // Health check
-   fastify.get('/health', async (request, reply) => {
+   fastify.get('/health', { logLevel: 'silent' }, async (request, reply) => {
      return {
        status: 'ok',
        timestamp: new Date().toISOString(),
