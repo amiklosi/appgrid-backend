@@ -106,6 +106,9 @@ model PaddlePurchase {
   userId              String    @map("user_id")
   emailSent           Boolean   @default(false) @map("email_sent")
   emailSentAt         DateTime? @map("email_sent_at")
+  purchasePrice       Int?      @map("purchase_price")
+  taxAmount           Int?      @map("tax_amount")
+  currency            String?
   paddleData          Json?     @map("paddle_data")
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")

@@ -203,6 +203,12 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
           tx
         );
 
+        // Extract price and tax from Paddle totals (values are in cents as strings)
+        const totals = data.details?.totals;
+        const purchasePrice = totals?.grand_total != null ? parseInt(totals.grand_total, 10) : null;
+        const taxAmount = totals?.tax != null ? parseInt(totals.tax, 10) : null;
+        const currency = data.currency_code ?? null;
+
         // Create purchase record
         await tx.paddlePurchase.create({
           data: {
@@ -212,6 +218,9 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
             licenseId: license.id,
             userId: user.id,
             emailSent: false, // Will be handled by queue
+            purchasePrice,
+            taxAmount,
+            currency,
             paddleData: data,
           },
         });
