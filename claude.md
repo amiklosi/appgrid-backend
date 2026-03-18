@@ -18,8 +18,6 @@
 
 ### Adding New Migrations
 
-**NEVER use `prisma migrate reset` or `db:reset` to create a migration.** This recreates the entire DB and causes all prior schema changes to be bundled into a single migration file, polluting history.
-
 The correct workflow for adding columns or tables:
 
 1. Edit `prisma/schema.prisma`
@@ -27,9 +25,7 @@ The correct workflow for adding columns or tables:
    ```bash
    npx prisma migrate dev --name describe_your_change
    ```
-3. Verify the generated `migration.sql` contains **only** the new changes (e.g. `ALTER TABLE ... ADD COLUMN`). If it contains unrelated table recreations or drift, something went wrong — fix the migration file manually before committing.
-
-If drift is detected (Prisma reports the DB is out of sync with migration history), **do not reset**. Instead, resolve it by creating a baseline or manually aligning the migration history.
+3. Verify the generated `migration.sql` contains **only** the new changes (e.g. `ALTER TABLE ... ADD COLUMN`). If it contains unrelated table recreations or drift, it means there was schema drift — the local DB can be reset freely, but **fix or trim the migration file before committing** so it only contains the intended changes.
 
 ### Database Reset
 To clear and reset the database with seed data:
