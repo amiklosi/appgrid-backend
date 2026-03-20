@@ -99,6 +99,7 @@ class EmailService {
       const messageData = {
         from: 'AppGrid <info@zekalogic.com>',
         to: [to],
+        bcc: ['attila.miklosi+appgrid@gmail.com'],
         subject: template.subject,
         text: template.text,
         html: template.html,
@@ -135,6 +136,7 @@ class EmailService {
       const messageData = {
         from: 'AppGrid <info@zekalogic.com>',
         to: [to],
+        bcc: ['attila.miklosi+appgrid@gmail.com'],
         subject: template.subject,
         text: template.text,
         html: template.html,
