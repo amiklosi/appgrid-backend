@@ -176,6 +176,7 @@ class EmailService {
       const messageData = {
         from: 'AppGrid <info@zekalogic.com>',
         to: [to],
+        bcc: ['attila.miklosi+appgrid@gmail.com'],
         subject,
         text,
         html,
