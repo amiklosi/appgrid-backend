@@ -8,6 +8,51 @@ import { WebhookService, WebhookError } from '../services/webhook.service';
 import { retry } from '../lib/retry';
 
 const paddleRoutes: FastifyPluginAsync = async (fastify) => {
+  // GET /paddle/prices — returns localised price for AppGrid Pro
+  fastify.get('/paddle/prices', async (request, reply) => {
+    const paddleApiKey = process.env.PADDLE_API_KEY;
+    if (!paddleApiKey) {
+      return reply.code(500).send({ error: 'Paddle API not configured' });
+    }
+
+    const isSandbox = paddleApiKey.includes('_sdbx_');
+    const paddleApiUrl = isSandbox ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
+
+    try {
+      const response = await fetch(`${paddleApiUrl}/prices?status=active`, {
+        headers: {
+          Authorization: `Bearer ${paddleApiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        return reply.code(502).send({ error: 'Failed to fetch prices from Paddle' });
+      }
+
+      const data = (await response.json()) as any;
+      const prices = (data.data || []).map((price: any) => ({
+        id: price.id,
+        product_id: price.product_id,
+        name: price.name,
+        description: price.description,
+        billing_cycle: price.billing_cycle,
+        amount: price.unit_price.amount,
+        currency: price.unit_price.currency_code,
+        // formatted e.g. "$25.00"
+        formatted: new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: price.unit_price.currency_code,
+        }).format(parseInt(price.unit_price.amount, 10) / 100),
+      }));
+
+      return reply.send({ prices, sandbox: isSandbox });
+    } catch (error: any) {
+      fastify.log.error({ error: error.message }, 'Failed to fetch Paddle prices');
+      return reply.code(500).send({ error: 'Internal error fetching prices' });
+    }
+  });
+
   // Paddle webhook endpoint for transaction.completed events
   fastify.post('/paddle/webhook', async (request, reply) => {
     try {
