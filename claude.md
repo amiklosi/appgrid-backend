@@ -3,11 +3,11 @@
 ## Deployment
 
 - **Staging**: push to `main` → GitHub Actions deploys automatically to `appgrid-staging.zekalogic.com`
-- **Production**: merge `main` into `production` and push → deploys to `appgrid.zekalogic.com`
+- **Production**: reset `production` to `main` and force push → deploys to `appgrid.zekalogic.com`
   - **NEVER deploy to production automatically.** Only deploy when the user explicitly asks.
   - When deploying:
     ```bash
-    git checkout production && git merge main && git push && git checkout main
+    git checkout production && git reset --hard origin/main && git push origin production --force && git checkout main
     ```
 
 ## Development Server
