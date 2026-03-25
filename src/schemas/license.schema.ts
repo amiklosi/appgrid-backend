@@ -81,6 +81,7 @@ export const LicenseResponseSchema = Type.Object({
 export const LicensePublicSchema = Type.Object({
   status: LicenseStatusSchema,
   expiresAt: Type.Union([Type.String(), Type.Null()]),
+  isTrial: Type.Optional(Type.Boolean()),
 });
 
 // Validation response
@@ -88,4 +89,19 @@ export const ValidationResponseSchema = Type.Object({
   valid: Type.Boolean(),
   message: Type.String(),
   license: Type.Optional(LicensePublicSchema),
+});
+
+// Start trial request
+export const StartTrialSchema = Type.Object({
+  deviceFingerprint: Type.String({ minLength: 1 }),
+  deviceName: Type.Optional(Type.String()),
+});
+
+export type StartTrialDTO = Static<typeof StartTrialSchema>;
+
+// Start trial response
+export const StartTrialResponseSchema = Type.Object({
+  licenseKey: Type.String(),
+  expiresAt: Type.String(),
+  isTrial: Type.Literal(true),
 });

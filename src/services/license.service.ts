@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
 import { prisma } from '../lib/prisma';
-import type { CreateLicenseDTO, UpdateLicenseDTO } from '../schemas/license.schema';
+import type { CreateLicenseDTO, StartTrialDTO, UpdateLicenseDTO } from '../schemas/license.schema';
 
 export class LicenseService {
   /**
@@ -39,6 +39,7 @@ export class LicenseService {
         licenseKey,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
         maxActivations: data.maxActivations || 1,
+        isTrial: (data as any).isTrial ?? false,
         metadata: data.metadata ? (data.metadata as any) : null,
         notes: data.notes,
       },
@@ -104,7 +105,9 @@ export class LicenseService {
 
     return {
       valid: isValid,
-      license: isValid ? license : null,
+      license: isValid && license
+        ? { status: license.status, expiresAt: license.expiresAt?.toISOString() ?? null, isTrial: (license as any).isTrial ?? false }
+        : null,
       message,
     };
   }
@@ -216,7 +219,9 @@ export class LicenseService {
 
     return {
       valid: isValid,
-      license: isValid ? license : null,
+      license: isValid && license
+        ? { status: license.status, expiresAt: license.expiresAt?.toISOString() ?? null, isTrial: (license as any).isTrial ?? false }
+        : null,
       message,
     };
   }
@@ -289,6 +294,86 @@ export class LicenseService {
       success,
       message,
       currentActivations: newCount,
+    };
+  }
+
+  /**
+   * Start a trial for a device
+   * Returns existing trial key if one already exists for this fingerprint.
+   */
+  static async startTrial(data: StartTrialDTO, trialDurationDays: number) {
+    const { deviceFingerprint, deviceName } = data;
+
+    // Check if a trial already exists for this fingerprint
+    const existingActivation = await prisma.deviceActivation.findFirst({
+      where: { deviceFingerprint },
+      include: { license: true },
+    });
+
+    if (existingActivation) {
+      const lic = existingActivation.license as any;
+      if (lic.isTrial) {
+        // Return existing trial key — no duplicate
+        return {
+          licenseKey: lic.licenseKey,
+          expiresAt: lic.expiresAt?.toISOString() ?? new Date().toISOString(),
+          isTrial: true as const,
+          alreadyExisted: true,
+        };
+      }
+      // Paid license already activated for this fingerprint
+      return {
+        paidLicenseExists: true,
+        licenseKey: lic.licenseKey,
+      };
+    }
+
+    const trialDurationMs = trialDurationDays * 86_400_000;
+    const expiresAt = new Date(Date.now() + trialDurationMs);
+    const placeholderEmail = `trial-${deviceFingerprint}@device.local`;
+
+    // Use a transaction to create user + license + activation atomically
+    const result = await prisma.$transaction(async (tx) => {
+      // Upsert the placeholder user
+      const user = await tx.user.upsert({
+        where: { email: placeholderEmail },
+        update: {},
+        create: {
+          email: placeholderEmail,
+          marketingConsent: false,
+        },
+      });
+
+      // Create trial license
+      const licenseKey = LicenseService.generateLicenseKey();
+      const license = await tx.license.create({
+        data: {
+          userId: user.id,
+          licenseKey,
+          expiresAt,
+          maxActivations: 1,
+          isTrial: true,
+          activatedAt: new Date(),
+        } as any,
+      });
+
+      // Create device activation
+      await tx.deviceActivation.create({
+        data: {
+          licenseId: license.id,
+          deviceFingerprint,
+          deviceName,
+        },
+      });
+
+      return { licenseKey, expiresAt };
+    });
+
+    return {
+      licenseKey: result.licenseKey,
+      expiresAt: result.expiresAt.toISOString(),
+      isTrial: true as const,
+      alreadyExisted: false,
     };
   }
 

@@ -6,6 +6,8 @@ import {
   DeactivateLicenseSchema,
   ValidationResponseSchema,
   DeactivationResponseSchema,
+  StartTrialSchema,
+  StartTrialResponseSchema,
 } from '../schemas/license.schema';
 
 // License key format: XXXX-XXXX-XXXX-XXXX (alphanumeric, uppercase)
@@ -118,6 +120,42 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
         'license deactivate'
       );
       return reply.send(result);
+    }
+  );
+  // Start a trial
+  fastify.post(
+    '/licenses/trial',
+    {
+      config: { rateLimit: RATE_LIMIT },
+      schema: {
+        body: StartTrialSchema,
+        tags: ['licenses'],
+        description: 'Start a free trial for a device (keyed on device fingerprint)',
+      },
+    },
+    async (request, reply) => {
+      const { deviceFingerprint, deviceName } = request.body as any;
+      const trialDurationDays = parseInt(process.env.TRIAL_DURATION_DAYS ?? '3', 10);
+
+      const result = await LicenseService.startTrial({ deviceFingerprint, deviceName }, trialDurationDays);
+
+      if ('paidLicenseExists' in result && result.paidLicenseExists) {
+        return reply.status(409).send({
+          error: 'paid_license_exists',
+          message: 'A paid license is already activated for this device.',
+        });
+      }
+
+      request.log.info(
+        { fingerprint: deviceFingerprint?.slice(0, 8) + '...', ip: request.ip },
+        'trial started'
+      );
+
+      return reply.send({
+        licenseKey: result.licenseKey,
+        expiresAt: result.expiresAt,
+        isTrial: true,
+      });
     }
   );
 };

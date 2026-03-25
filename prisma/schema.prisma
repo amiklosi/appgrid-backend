@@ -42,6 +42,7 @@ model License {
   activatedAt    DateTime?     @map("activated_at")
   revokedAt      DateTime?     @map("revoked_at")
   maxActivations Int           @default(1) @map("max_activations")
+  isTrial        Boolean       @default(false) @map("is_trial")
   metadata       Json?
   notes          String?
   createdAt      DateTime      @default(now()) @map("created_at")
