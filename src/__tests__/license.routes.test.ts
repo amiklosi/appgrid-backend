@@ -122,6 +122,7 @@ describe('License Routes', () => {
       const body = JSON.parse(response.body);
       expect(body.error).toBe('paid_license_exists');
       expect(typeof body.message).toBe('string');
+      expect(body.licenseKey).toBe('PAID-LICS-ENKY-0001');
     });
 
     it('should return 400 when deviceFingerprint is missing', async () => {
