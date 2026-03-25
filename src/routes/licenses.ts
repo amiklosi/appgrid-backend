@@ -14,6 +14,7 @@ import {
 const TrialConflictResponseSchema = Type.Object({
   error: Type.String(),
   message: Type.String(),
+  licenseKey: Type.String(),
 });
 
 // License key format: XXXX-XXXX-XXXX-XXXX (alphanumeric, uppercase)
@@ -156,6 +157,7 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(409).send({
           error: 'paid_license_exists',
           message: 'A paid license is already activated for this device.',
+          licenseKey: result.licenseKey,
         });
       }
 
