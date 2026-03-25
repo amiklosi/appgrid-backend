@@ -137,8 +137,8 @@ model DeviceActivation {
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@unique([licenseId, deviceFingerprint])
+  @@unique([deviceFingerprint])
   @@index([licenseId])
-  @@index([deviceFingerprint])
   @@map("device_activations")
 }
 

@@ -972,10 +972,9 @@ describe('LicenseService', () => {
     });
 
     it('should create a new trial when no existing activation exists', async () => {
-      prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
-
       const mockLicense = makeMockLicense();
       prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
         prismaMock.user.upsert.mockResolvedValue({ id: 'user-trial-1' } as any);
         prismaMock.license.create.mockResolvedValue(mockLicense as any);
         prismaMock.deviceActivation.create.mockResolvedValue({} as any);
@@ -987,59 +986,70 @@ describe('LicenseService', () => {
         trialDays
       );
 
-      expect(result.isTrial).toBe(true);
+      expect(result.kind).toBe('new_trial');
       expect(result.licenseKey).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
-      expect(result.alreadyExisted).toBe(false);
-      expect(new Date(result.expiresAt).getTime()).toBeGreaterThan(Date.now());
+      if (result.kind === 'new_trial') {
+        expect(result.isTrial).toBe(true);
+        expect(new Date(result.expiresAt).getTime()).toBeGreaterThan(Date.now());
+      }
     });
 
     it('should return existing trial key when fingerprint already has a trial', async () => {
       const existingLicense = makeMockLicense();
-      prismaMock.deviceActivation.findFirst.mockResolvedValue({
-        id: 'activation-1',
-        licenseId: 'license-trial-1',
-        deviceFingerprint: fingerprint,
-        deviceName,
-        license: existingLicense,
-      } as any);
+      prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue({
+          id: 'activation-1',
+          licenseId: 'license-trial-1',
+          deviceFingerprint: fingerprint,
+          deviceName,
+          license: existingLicense,
+        } as any);
+        return fn(prismaMock);
+      });
 
       const result = await LicenseService.startTrial(
         { deviceFingerprint: fingerprint, deviceName },
         trialDays
       );
 
-      expect(result.isTrial).toBe(true);
+      expect(result.kind).toBe('existing_trial');
       expect(result.licenseKey).toBe('TRIAL-KEY-1234');
-      expect((result as any).alreadyExisted).toBe(true);
-      // Should not create anything new
-      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      if (result.kind === 'existing_trial') {
+        expect(result.isTrial).toBe(true);
+      }
+      // Should not create any new records
+      expect(prismaMock.license.create).not.toHaveBeenCalled();
+      expect(prismaMock.deviceActivation.create).not.toHaveBeenCalled();
     });
 
-    it('should return paidLicenseExists when fingerprint has a paid license', async () => {
+    it('should return paid_license_exists when fingerprint has a paid license', async () => {
       const paidLicense = makeMockLicense({ isTrial: false, licenseKey: 'PAID-KEY-5678' });
-      prismaMock.deviceActivation.findFirst.mockResolvedValue({
-        id: 'activation-1',
-        licenseId: 'license-paid-1',
-        deviceFingerprint: fingerprint,
-        deviceName,
-        license: paidLicense,
-      } as any);
+      prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue({
+          id: 'activation-1',
+          licenseId: 'license-paid-1',
+          deviceFingerprint: fingerprint,
+          deviceName,
+          license: paidLicense,
+        } as any);
+        return fn(prismaMock);
+      });
 
       const result = await LicenseService.startTrial(
         { deviceFingerprint: fingerprint, deviceName },
         trialDays
       );
 
-      expect((result as any).paidLicenseExists).toBe(true);
-      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(result.kind).toBe('paid_license_exists');
+      expect(prismaMock.license.create).not.toHaveBeenCalled();
+      expect(prismaMock.deviceActivation.create).not.toHaveBeenCalled();
     });
 
     it('should set expiresAt to now + trialDurationDays', async () => {
-      prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
-
       const before = Date.now();
       const mockLicense = makeMockLicense();
       prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
         prismaMock.user.upsert.mockResolvedValue({ id: 'user-trial-1' } as any);
         prismaMock.license.create.mockResolvedValue(mockLicense as any);
         prismaMock.deviceActivation.create.mockResolvedValue({} as any);
@@ -1049,16 +1059,18 @@ describe('LicenseService', () => {
       const result = await LicenseService.startTrial({ deviceFingerprint: fingerprint }, trialDays);
       const after = Date.now();
 
-      const expiresMs = new Date(result.expiresAt).getTime();
-      expect(expiresMs).toBeGreaterThanOrEqual(before + trialDays * 86_400_000 - 1000);
-      expect(expiresMs).toBeLessThanOrEqual(after + trialDays * 86_400_000 + 1000);
+      expect(result.kind).toBe('new_trial');
+      if (result.kind === 'new_trial') {
+        const expiresMs = new Date(result.expiresAt).getTime();
+        expect(expiresMs).toBeGreaterThanOrEqual(before + trialDays * 86_400_000 - 1000);
+        expect(expiresMs).toBeLessThanOrEqual(after + trialDays * 86_400_000 + 1000);
+      }
     });
 
     it('should use placeholder email based on fingerprint', async () => {
-      prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
-
       const mockLicense = makeMockLicense();
       prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
         prismaMock.user.upsert.mockResolvedValue({ id: 'user-trial-1' } as any);
         prismaMock.license.create.mockResolvedValue(mockLicense as any);
         prismaMock.deviceActivation.create.mockResolvedValue({} as any);
@@ -1079,10 +1091,9 @@ describe('LicenseService', () => {
     });
 
     it('should create license with isTrial=true and maxActivations=1', async () => {
-      prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
-
       const mockLicense = makeMockLicense();
       prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
         prismaMock.user.upsert.mockResolvedValue({ id: 'user-trial-1' } as any);
         prismaMock.license.create.mockResolvedValue(mockLicense as any);
         prismaMock.deviceActivation.create.mockResolvedValue({} as any);
@@ -1101,11 +1112,10 @@ describe('LicenseService', () => {
       );
     });
 
-    it('should return isTrial=true in the response', async () => {
-      prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
-
+    it('should return kind=new_trial with isTrial=true in the response', async () => {
       const mockLicense = makeMockLicense();
       prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
         prismaMock.user.upsert.mockResolvedValue({ id: 'user-trial-1' } as any);
         prismaMock.license.create.mockResolvedValue(mockLicense as any);
         prismaMock.deviceActivation.create.mockResolvedValue({} as any);
@@ -1114,7 +1124,10 @@ describe('LicenseService', () => {
 
       const result = await LicenseService.startTrial({ deviceFingerprint: fingerprint }, trialDays);
 
-      expect(result.isTrial).toBe(true);
+      expect(result.kind).toBe('new_trial');
+      if (result.kind === 'new_trial') {
+        expect(result.isTrial).toBe(true);
+      }
     });
 
     it('should return existing expired trial key without creating a new one', async () => {
@@ -1123,32 +1136,36 @@ describe('LicenseService', () => {
         expiresAt: new Date(Date.now() - 86_400_000), // 1 day ago
         licenseKey: 'EXPD-TRIA-LKEY-0001',
       });
-      prismaMock.deviceActivation.findFirst.mockResolvedValue({
-        id: 'activation-expired',
-        licenseId: expiredLicense.id,
-        deviceFingerprint: fingerprint,
-        deviceName,
-        license: expiredLicense,
-      } as any);
+      prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue({
+          id: 'activation-expired',
+          licenseId: expiredLicense.id,
+          deviceFingerprint: fingerprint,
+          deviceName,
+          license: expiredLicense,
+        } as any);
+        return fn(prismaMock);
+      });
 
       const result = await LicenseService.startTrial(
         { deviceFingerprint: fingerprint, deviceName },
         trialDays
       );
 
-      // Current behavior: returns the old key as-is (client must check expiresAt)
-      expect(result.isTrial).toBe(true);
+      // Returns the old key as-is (client must check expiresAt)
+      expect(result.kind).toBe('existing_trial');
       expect(result.licenseKey).toBe('EXPD-TRIA-LKEY-0001');
-      expect((result as any).alreadyExisted).toBe(true);
-      expect(new Date(result.expiresAt).getTime()).toBeLessThan(Date.now());
-      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      if (result.kind === 'existing_trial') {
+        expect(new Date(result.expiresAt).getTime()).toBeLessThan(Date.now());
+      }
+      expect(prismaMock.license.create).not.toHaveBeenCalled();
+      expect(prismaMock.deviceActivation.create).not.toHaveBeenCalled();
     });
 
     it('should create device activation with correct licenseId and fingerprint', async () => {
-      prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
-
       const mockLicense = makeMockLicense();
       prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
         prismaMock.user.upsert.mockResolvedValue({ id: 'user-trial-1' } as any);
         prismaMock.license.create.mockResolvedValue(mockLicense as any);
         prismaMock.deviceActivation.create.mockResolvedValue({} as any);
@@ -1169,10 +1186,9 @@ describe('LicenseService', () => {
     });
 
     it('should work when deviceName is omitted', async () => {
-      prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
-
       const mockLicense = makeMockLicense();
       prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
         prismaMock.user.upsert.mockResolvedValue({ id: 'user-trial-1' } as any);
         prismaMock.license.create.mockResolvedValue(mockLicense as any);
         prismaMock.deviceActivation.create.mockResolvedValue({} as any);
@@ -1181,8 +1197,7 @@ describe('LicenseService', () => {
 
       const result = await LicenseService.startTrial({ deviceFingerprint: fingerprint }, trialDays);
 
-      expect(result.isTrial).toBe(true);
-      expect(result.alreadyExisted).toBe(false);
+      expect(result.kind).toBe('new_trial');
       expect(prismaMock.deviceActivation.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({

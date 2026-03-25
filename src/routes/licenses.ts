@@ -152,7 +152,7 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
         trialDurationDays
       );
 
-      if ('paidLicenseExists' in result && result.paidLicenseExists) {
+      if (result.kind === 'paid_license_exists') {
         return reply.status(409).send({
           error: 'paid_license_exists',
           message: 'A paid license is already activated for this device.',

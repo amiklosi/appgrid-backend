@@ -48,10 +48,9 @@ describe('License Routes', () => {
     });
 
     it('should return 200 with licenseKey, expiresAt and isTrial=true for a new trial', async () => {
-      prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
-
       const mockLicense = makeMockLicense();
       prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
         prismaMock.user.upsert.mockResolvedValue({ id: 'user-trial-1' } as any);
         prismaMock.license.create.mockResolvedValue(mockLicense as any);
         prismaMock.deviceActivation.create.mockResolvedValue({} as any);
@@ -75,13 +74,16 @@ describe('License Routes', () => {
 
     it('should return 200 with the existing trial key for a duplicate fingerprint', async () => {
       const existingLicense = makeMockLicense({ licenseKey: 'EXST-TRIA-LKEY-0001' });
-      prismaMock.deviceActivation.findFirst.mockResolvedValue({
-        id: 'activation-1',
-        licenseId: existingLicense.id,
-        deviceFingerprint: fingerprint,
-        deviceName,
-        license: existingLicense,
-      } as any);
+      prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue({
+          id: 'activation-1',
+          licenseId: existingLicense.id,
+          deviceFingerprint: fingerprint,
+          deviceName,
+          license: existingLicense,
+        } as any);
+        return fn(prismaMock);
+      });
 
       const response = await app.inject({
         method: 'POST',
@@ -98,13 +100,16 @@ describe('License Routes', () => {
 
     it('should return 409 when the device already has a paid license', async () => {
       const paidLicense = makeMockLicense({ isTrial: false, licenseKey: 'PAID-LICS-ENKY-0001' });
-      prismaMock.deviceActivation.findFirst.mockResolvedValue({
-        id: 'activation-1',
-        licenseId: paidLicense.id,
-        deviceFingerprint: fingerprint,
-        deviceName,
-        license: paidLicense,
-      } as any);
+      prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue({
+          id: 'activation-1',
+          licenseId: paidLicense.id,
+          deviceFingerprint: fingerprint,
+          deviceName,
+          license: paidLicense,
+        } as any);
+        return fn(prismaMock);
+      });
 
       const response = await app.inject({
         method: 'POST',
@@ -144,10 +149,9 @@ describe('License Routes', () => {
     it('should default TRIAL_DURATION_DAYS to 3 when env var is not set', async () => {
       delete process.env.TRIAL_DURATION_DAYS;
 
-      prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
-
       const mockLicense = makeMockLicense();
       prismaMock.$transaction.mockImplementation(async (fn: any) => {
+        prismaMock.deviceActivation.findFirst.mockResolvedValue(null);
         prismaMock.user.upsert.mockResolvedValue({ id: 'user-trial-1' } as any);
         prismaMock.license.create.mockResolvedValue(mockLicense as any);
         prismaMock.deviceActivation.create.mockResolvedValue({} as any);

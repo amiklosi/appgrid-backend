@@ -2,6 +2,11 @@ import { randomBytes } from 'crypto';
 import { prisma } from '../lib/prisma';
 import type { CreateLicenseDTO, StartTrialDTO, UpdateLicenseDTO } from '../schemas/license.schema';
 
+export type TrialResult =
+  | { kind: 'new_trial'; licenseKey: string; expiresAt: string; isTrial: true }
+  | { kind: 'existing_trial'; licenseKey: string; expiresAt: string; isTrial: true }
+  | { kind: 'paid_license_exists'; licenseKey: string };
+
 export class LicenseService {
   /**
    * Generate a random license key in the format: XXXX-XXXX-XXXX-XXXX
@@ -308,42 +313,45 @@ export class LicenseService {
   }
 
   /**
-   * Start a trial for a device
+   * Start a trial for a device.
    * Returns existing trial key if one already exists for this fingerprint.
+   * The existence check runs inside the transaction so concurrent requests
+   * are serialised by the DB — the unique constraint on device_fingerprint
+   * acts as a final safety net.
    */
-  static async startTrial(data: StartTrialDTO, trialDurationDays: number) {
+  static async startTrial(data: StartTrialDTO, trialDurationDays: number): Promise<TrialResult> {
     const { deviceFingerprint, deviceName } = data;
-
-    // Check if a trial already exists for this fingerprint
-    const existingActivation = await prisma.deviceActivation.findFirst({
-      where: { deviceFingerprint },
-      include: { license: true },
-    });
-
-    if (existingActivation) {
-      const lic = existingActivation.license as any;
-      if (lic.isTrial) {
-        // Return existing trial key — no duplicate
-        return {
-          licenseKey: lic.licenseKey,
-          expiresAt: lic.expiresAt?.toISOString() ?? new Date().toISOString(),
-          isTrial: true as const,
-          alreadyExisted: true,
-        };
-      }
-      // Paid license already activated for this fingerprint
-      return {
-        paidLicenseExists: true,
-        licenseKey: lic.licenseKey,
-      };
-    }
 
     const trialDurationMs = trialDurationDays * 86_400_000;
     const expiresAt = new Date(Date.now() + trialDurationMs);
     const placeholderEmail = `trial-${deviceFingerprint}@device.local`;
 
-    // Use a transaction to create user + license + activation atomically
-    const result = await prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx) => {
+      // Re-check inside the transaction to close the TOCTOU window
+      const existingActivation = await tx.deviceActivation.findFirst({
+        where: { deviceFingerprint },
+        include: { license: true },
+      });
+
+      if (existingActivation) {
+        const lic = existingActivation.license;
+        if (lic.isTrial) {
+          if (!lic.expiresAt) {
+            throw new Error(`Trial license ${lic.licenseKey} has no expiry date`);
+          }
+          return {
+            kind: 'existing_trial' as const,
+            licenseKey: lic.licenseKey,
+            expiresAt: lic.expiresAt.toISOString(),
+            isTrial: true as const,
+          };
+        }
+        return {
+          kind: 'paid_license_exists' as const,
+          licenseKey: lic.licenseKey,
+        };
+      }
+
       // Upsert the placeholder user
       const user = await tx.user.upsert({
         where: { email: placeholderEmail },
@@ -367,7 +375,8 @@ export class LicenseService {
         },
       });
 
-      // Create device activation
+      // Create device activation — unique constraint on device_fingerprint
+      // will reject a duplicate that slipped through a concurrent transaction
       await tx.deviceActivation.create({
         data: {
           licenseId: license.id,
@@ -376,15 +385,13 @@ export class LicenseService {
         },
       });
 
-      return { licenseKey, expiresAt };
+      return {
+        kind: 'new_trial' as const,
+        licenseKey,
+        expiresAt: expiresAt.toISOString(),
+        isTrial: true as const,
+      };
     });
-
-    return {
-      licenseKey: result.licenseKey,
-      expiresAt: result.expiresAt.toISOString(),
-      isTrial: true as const,
-      alreadyExisted: false,
-    };
   }
 
   /**
