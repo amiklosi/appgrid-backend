@@ -109,6 +109,11 @@ if [ -z "$AXIOM_DATASET" ]; then
     exit 1
 fi
 
+if [ -z "$TRIAL_DURATION_DAYS" ]; then
+    print_error "TRIAL_DURATION_DAYS not set in .env"
+    exit 1
+fi
+
 print_status "🚀 Starting Portainer deployment..."
 print_status "Portainer URL: ${PORTAINER_URL}"
 print_status "Stack Name: ${PORTAINER_STACK_NAME}"
@@ -162,7 +167,8 @@ if [ -z "$STACK_ID" ]; then
     {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
     {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"},
     {"name": "AXIOM_TOKEN", "value": "${AXIOM_TOKEN}"},
-    {"name": "AXIOM_DATASET", "value": "${AXIOM_DATASET}"}
+    {"name": "AXIOM_DATASET", "value": "${AXIOM_DATASET}"},
+    {"name": "TRIAL_DURATION_DAYS", "value": "${TRIAL_DURATION_DAYS}"}
   ]
 }
 EOF
@@ -195,7 +201,8 @@ else
     {"name": "PADDLE_API_KEY", "value": "${PADDLE_API_KEY}"},
     {"name": "PADDLE_WEBHOOK_SECRET", "value": "${PADDLE_WEBHOOK_SECRET}"},
     {"name": "AXIOM_TOKEN", "value": "${AXIOM_TOKEN}"},
-    {"name": "AXIOM_DATASET", "value": "${AXIOM_DATASET}"}
+    {"name": "AXIOM_DATASET", "value": "${AXIOM_DATASET}"},
+    {"name": "TRIAL_DURATION_DAYS", "value": "${TRIAL_DURATION_DAYS}"}
   ],
   "prune": false,
   "pullImage": true

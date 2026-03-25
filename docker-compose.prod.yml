@@ -16,6 +16,7 @@ services:
       - PADDLE_WEBHOOK_SECRET=${PADDLE_WEBHOOK_SECRET}
       - AXIOM_TOKEN=${AXIOM_TOKEN}
       - AXIOM_DATASET=${AXIOM_DATASET}
+      - TRIAL_DURATION_DAYS=${TRIAL_DURATION_DAYS}
     depends_on:
       db:
         condition: service_healthy
