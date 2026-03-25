@@ -145,7 +145,7 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { deviceFingerprint, deviceName } = request.body as any;
-      const trialDurationDays = parseInt(process.env.TRIAL_DURATION_DAYS ?? '3', 10);
+      const trialDurationDays = parseInt(process.env.TRIAL_DURATION_DAYS || '3', 10);
 
       const result = await LicenseService.startTrial(
         { deviceFingerprint, deviceName },
