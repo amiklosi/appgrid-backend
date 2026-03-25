@@ -39,7 +39,7 @@ export class LicenseService {
         licenseKey,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
         maxActivations: data.maxActivations || 1,
-        isTrial: (data as any).isTrial ?? false,
+        isTrial: data.isTrial ?? false,
         metadata: data.metadata ? (data.metadata as any) : null,
         notes: data.notes,
       },
@@ -105,9 +105,14 @@ export class LicenseService {
 
     return {
       valid: isValid,
-      license: isValid && license
-        ? { status: license.status, expiresAt: license.expiresAt?.toISOString() ?? null, isTrial: (license as any).isTrial ?? false }
-        : null,
+      license:
+        isValid && license
+          ? {
+              status: license.status,
+              expiresAt: license.expiresAt?.toISOString() ?? null,
+              isTrial: license.isTrial,
+            }
+          : null,
       message,
     };
   }
@@ -219,9 +224,14 @@ export class LicenseService {
 
     return {
       valid: isValid,
-      license: isValid && license
-        ? { status: license.status, expiresAt: license.expiresAt?.toISOString() ?? null, isTrial: (license as any).isTrial ?? false }
-        : null,
+      license:
+        isValid && license
+          ? {
+              status: license.status,
+              expiresAt: license.expiresAt?.toISOString() ?? null,
+              isTrial: license.isTrial,
+            }
+          : null,
       message,
     };
   }
@@ -354,7 +364,7 @@ export class LicenseService {
           maxActivations: 1,
           isTrial: true,
           activatedAt: new Date(),
-        } as any,
+        },
       });
 
       // Create device activation

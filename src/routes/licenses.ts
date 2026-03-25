@@ -1,4 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
+import { Type } from '@sinclair/typebox';
 import { LicenseService } from '../services/license.service';
 import {
   ValidateLicenseSchema,
@@ -9,6 +10,11 @@ import {
   StartTrialSchema,
   StartTrialResponseSchema,
 } from '../schemas/license.schema';
+
+const TrialConflictResponseSchema = Type.Object({
+  error: Type.String(),
+  message: Type.String(),
+});
 
 // License key format: XXXX-XXXX-XXXX-XXXX (alphanumeric, uppercase)
 const LICENSE_KEY_REGEX = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
@@ -129,6 +135,10 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
       config: { rateLimit: RATE_LIMIT },
       schema: {
         body: StartTrialSchema,
+        response: {
+          200: StartTrialResponseSchema,
+          409: TrialConflictResponseSchema,
+        },
         tags: ['licenses'],
         description: 'Start a free trial for a device (keyed on device fingerprint)',
       },
@@ -137,7 +147,10 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
       const { deviceFingerprint, deviceName } = request.body as any;
       const trialDurationDays = parseInt(process.env.TRIAL_DURATION_DAYS ?? '3', 10);
 
-      const result = await LicenseService.startTrial({ deviceFingerprint, deviceName }, trialDurationDays);
+      const result = await LicenseService.startTrial(
+        { deviceFingerprint, deviceName },
+        trialDurationDays
+      );
 
       if ('paidLicenseExists' in result && result.paidLicenseExists) {
         return reply.status(409).send({

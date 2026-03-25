@@ -13,6 +13,7 @@ export const CreateLicenseSchema = Type.Object({
   userId: Type.String({ format: 'uuid' }),
   expiresAt: Type.Optional(Type.String({ format: 'date-time' })),
   maxActivations: Type.Optional(Type.Integer({ minimum: 1, default: 1 })),
+  isTrial: Type.Optional(Type.Boolean()),
   metadata: Type.Optional(Type.Record(Type.String(), Type.Any())),
   notes: Type.Optional(Type.String()),
 });
