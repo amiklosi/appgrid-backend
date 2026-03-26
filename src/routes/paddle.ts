@@ -56,11 +56,12 @@ const paddleRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Test route — fires a test event to PostHog
   fastify.post('/paddle/test-analytics', async (request, reply) => {
-    analytics.track('test-backend', 'appgridmac_backend_test_event', {
+    const { event = 'appgridmac_backend_test_event' } = (request.query as any);
+    analytics.track('test-backend', event, {
       source: 'test-analytics-route',
       timestamp: new Date().toISOString(),
     });
-    return { success: true, message: 'Test event sent to PostHog' };
+    return { success: true, message: `Test event '${event}' sent to PostHog` };
   });
 
   // Paddle webhook endpoint for transaction.completed events
