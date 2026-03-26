@@ -4,6 +4,7 @@ import { FastifyInstance } from 'fastify';
 import { buildApp } from '../index';
 import * as emailLib from '../lib/email';
 import * as emailQueueService from '../services/email-queue.service';
+import * as analyticsLib from '../lib/analytics';
 import { createHmac } from 'crypto';
 
 // Mock services
@@ -18,6 +19,13 @@ vi.mock('../lib/email', () => ({
 vi.mock('../services/email-queue.service', () => ({
   EmailQueueService: {
     queueEmail: vi.fn(),
+  },
+}));
+
+vi.mock('../lib/analytics', () => ({
+  analytics: {
+    track: vi.fn(),
+    shutdown: vi.fn(),
   },
 }));
 
@@ -357,6 +365,16 @@ describe('Paddle Webhook Routes', () => {
 
       // Verify purchase record was created
       expect(prismaMock.paddlePurchase.create).toHaveBeenCalled();
+
+      // Verify analytics event was fired
+      expect(analyticsLib.analytics.track).toHaveBeenCalledWith(
+        'ctm_12345',
+        'appgridmac_backend_purchase_completed',
+        expect.objectContaining({
+          transaction_id: 'txn_12345',
+          license_type: 'lifetime',
+        })
+      );
     });
 
     it('should return cached result for duplicate webhook', async () => {
@@ -630,6 +648,17 @@ describe('Paddle Webhook Routes', () => {
           revokedAt: expect.any(Date),
         }),
       });
+
+      // Verify analytics event was fired
+      expect(analyticsLib.analytics.track).toHaveBeenCalledWith(
+        'ctm_12345',
+        'appgridmac_backend_purchase_refunded',
+        expect.objectContaining({
+          transaction_id: 'txn_12345',
+          adjustment_id: 'adj_12345',
+          license_id: 'license-1',
+        })
+      );
     });
 
     it('should skip if license already revoked', async () => {
