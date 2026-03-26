@@ -17,6 +17,7 @@ services:
       - AXIOM_TOKEN=${AXIOM_TOKEN}
       - AXIOM_DATASET=${AXIOM_DATASET}
       - TRIAL_DURATION_DAYS=${TRIAL_DURATION_DAYS}
+      - POSTHOG_API_KEY=${POSTHOG_API_KEY}
     depends_on:
       db:
         condition: service_healthy

@@ -6,6 +6,7 @@ import { emailService } from '../lib/email';
 import { EmailQueueService } from '../services/email-queue.service';
 import { WebhookService, WebhookError } from '../services/webhook.service';
 import { retry } from '../lib/retry';
+import { analytics } from '../lib/analytics';
 
 const paddleRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /paddle/prices — returns localised price for AppGrid Pro
@@ -318,6 +319,15 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
             'Failed to queue email, but purchase succeeded'
           );
         }
+
+        analytics.track(customerId, 'appgridmac_backend_purchase_completed', {
+          transaction_id: transactionId,
+          license_type: result.isLifetime ? 'lifetime' : 'annual',
+          currency: data.currency_code ?? null,
+          price_cents: data.details?.totals?.grand_total != null
+            ? parseInt(data.details.totals.grand_total, 10)
+            : null,
+        });
       }
 
       return {
@@ -405,6 +415,12 @@ async function handleAdjustmentUpdated(fastify: any, payload: any, data: any) {
           },
           'License revoked due to refund'
         );
+
+        analytics.track(purchase.paddleCustomerId ?? transactionId, 'appgridmac_backend_purchase_refunded', {
+          transaction_id: transactionId,
+          adjustment_id: adjustmentId,
+          license_id: purchase.license.id,
+        });
 
         return {
           success: true,

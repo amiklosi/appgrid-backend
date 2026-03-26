@@ -29,6 +29,9 @@ const CONFIG_REQUIREMENTS: RequiredConfig[] = [
   // RevenueCat (for migrations)
   { name: 'REVENUECAT_API_KEY', description: 'RevenueCat API access', required: false },
   { name: 'REVENUECAT_PROJECT_ID', description: 'RevenueCat project identifier', required: false },
+
+  // PostHog (analytics)
+  { name: 'POSTHOG_API_KEY', description: 'PostHog analytics API key', required: false },
 ];
 
 export class ConfigValidator {
