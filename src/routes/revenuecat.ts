@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '../lib/prisma';
 import { LicenseService } from '../services/license.service';
 import { emailService } from '../lib/email';
+import { analytics } from '../lib/analytics';
 
 const revenuecatRoutes: FastifyPluginAsync = async (fastify) => {
   // Migrate RevenueCat user to new license system
@@ -278,6 +279,11 @@ const revenuecatRoutes: FastifyPluginAsync = async (fastify) => {
           },
           'Migration completed successfully'
         );
+
+        analytics.track(userId, 'appgridmac_backend_revenuecat_migration_completed', {
+          subscription_type: subscriptionType,
+          expires_at: licenseExpiresAt?.toISOString() ?? null,
+        });
 
         return reply.send({
           success: true,
