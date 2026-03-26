@@ -54,11 +54,8 @@ const paddleRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // Test route — fires a test event to PostHog (dev/staging only)
+  // Test route — fires a test event to PostHog
   fastify.post('/paddle/test-analytics', async (request, reply) => {
-    if (process.env.NODE_ENV === 'production') {
-      return reply.code(404).send({ error: 'Not found' });
-    }
     analytics.track('test-backend', 'appgridmac_backend_test_event', {
       source: 'test-analytics-route',
       timestamp: new Date().toISOString(),
