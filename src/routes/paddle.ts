@@ -337,6 +337,9 @@ async function handleTransactionCompleted(fastify: any, payload: any, data: any)
           price_cents: data.details?.totals?.grand_total != null
             ? parseInt(data.details.totals.grand_total, 10)
             : null,
+          earnings_cents: data.details?.totals?.earnings != null
+            ? parseInt(data.details.totals.earnings, 10)
+            : null,
         });
       }
 

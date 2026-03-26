@@ -258,6 +258,13 @@ describe('Paddle Webhook Routes', () => {
           id: 'txn_12345',
           customer_id: 'ctm_12345',
           status: 'completed',
+          currency_code: 'USD',
+          details: {
+            totals: {
+              grand_total: '4900',
+              earnings: '4155',
+            },
+          },
           items: [
             {
               price: {
@@ -373,6 +380,9 @@ describe('Paddle Webhook Routes', () => {
         expect.objectContaining({
           transaction_id: 'txn_12345',
           license_type: 'lifetime',
+          currency: 'USD',
+          price_cents: 4900,
+          earnings_cents: 4155,
         })
       );
     });
