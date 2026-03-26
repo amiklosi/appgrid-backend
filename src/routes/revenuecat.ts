@@ -140,13 +140,13 @@ const revenuecatRoutes: FastifyPluginAsync = async (fastify) => {
             break;
           }
 
-          // Check if it's an annual subscription (expires at least 11 months from now)
+          // Check if it's an annual subscription (at least 1 month remaining)
           const expirationDate = new Date(expiresAt);
           const now = new Date();
           const monthsUntilExpiration =
             (expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24 * 30);
 
-          if (monthsUntilExpiration >= 11) {
+          if (monthsUntilExpiration >= 1) {
             isEligible = true;
             licenseExpiresAt = expirationDate;
             subscriptionType = 'annual';
