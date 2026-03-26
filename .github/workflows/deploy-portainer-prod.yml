@@ -85,6 +85,7 @@ jobs:
           PADDLE_WEBHOOK_SECRET: ${{ secrets.PADDLE_WEBHOOK_SECRET }}
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
           AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
+          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
         run: |
           # Get Portainer endpoint ID
           ENDPOINT_ID=$(curl -s -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
@@ -110,6 +111,7 @@ jobs:
             --arg paddleSecret "${PADDLE_WEBHOOK_SECRET}" \
             --arg axiomToken "${AXIOM_TOKEN}" \
             --arg axiomDataset "${AXIOM_DATASET}" \
+            --arg posthogKey "${POSTHOG_API_KEY}" \
             '{
               name: $name,
               stackFileContent: $compose,
@@ -122,7 +124,8 @@ jobs:
                 {name: "PADDLE_API_KEY", value: $paddleKey},
                 {name: "PADDLE_WEBHOOK_SECRET", value: $paddleSecret},
                 {name: "AXIOM_TOKEN", value: $axiomToken},
-                {name: "AXIOM_DATASET", value: $axiomDataset}
+                {name: "AXIOM_DATASET", value: $axiomDataset},
+                {name: "POSTHOG_API_KEY", value: $posthogKey}
               ]
             }' > /tmp/stack-payload.json
 
