@@ -60,7 +60,6 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       // 3. Validate classifier output
       // ---------------------------------------------------------------------------
       if (
-        (classified.action === 'move_to_page' || classified.action === 'create_group' || classified.action === 'move_to_group') &&
         classified.targetPage !== null &&
         classified.targetPage > grid.pages.length + 1
       ) {
@@ -84,12 +83,12 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         switch (classified.action) {
           case 'move_to_page':
-            result = await executeMoveToPage(classified, grid, openai, executorModel);
+            result = await executeMoveToPage(classified, grid, openai, executorModel, maxItemsPerPage, currentPage);
             break;
 
           case 'create_group':
           case 'move_to_group':
-            result = await executeGroup(classified, grid, openai, executorModel);
+            result = await executeGroup(classified, grid, openai, executorModel, currentPage);
             break;
 
           case 'sort_page':

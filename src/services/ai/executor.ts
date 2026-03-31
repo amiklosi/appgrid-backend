@@ -134,7 +134,9 @@ export async function executeMoveToPage(
   ca: ClassifiedAction,
   grid: Grid,
   client: OpenAI,
-  model: string
+  model: string,
+  maxItemsPerPage: number = 35,
+  currentPage?: number
 ): Promise<ExecutorResult> {
   // source_page set → deterministic, no LLM needed
   if (ca.sourcePage !== null) {
@@ -152,7 +154,9 @@ export async function executeMoveToPage(
   const gridRepr = toJsonIds(grid);
   const userMsg =
     `Grid:\n${gridRepr}\n\n` +
-    `Instruction: Move ${ca.filter ?? 'matching apps'} to page ${ca.targetPage}.`;
+    (currentPage !== undefined ? `User is currently on page ${currentPage}.\n` : '') +
+    `Instruction: Move ${ca.filter ?? 'matching apps'} to page ${ca.targetPage}.\n` +
+    `Max ${maxItemsPerPage} apps per page.`;
 
   const resp = await client.chat.completions.create({
     model,
@@ -206,10 +210,11 @@ export async function executeGroup(
   ca: ClassifiedAction,
   grid: Grid,
   client: OpenAI,
-  model: string
+  model: string,
+  currentPage?: number
 ): Promise<ExecutorResult> {
   const groupName = ca.groupName ?? 'New Group';
-  const targetPage = ca.targetPage ?? 1;
+  const targetPage = ca.targetPage ?? ca.sourcePage ?? 1;
   const semantic = ca.filterType === 'semantic';
 
   // source_page + no filter → deterministic
@@ -252,6 +257,7 @@ export async function executeGroup(
   );
   const userMsg =
     `Apps:\n${appsRepr}\n\n` +
+    (currentPage !== undefined ? `User is currently on page ${currentPage}.\n` : '') +
     `Instruction: ${ca.filter ?? 'matching apps'} should go into a group named '${groupName}'.`;
 
   const resp = await client.chat.completions.create({
