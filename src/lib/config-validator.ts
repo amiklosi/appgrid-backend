@@ -32,6 +32,9 @@ const CONFIG_REQUIREMENTS: RequiredConfig[] = [
 
   // PostHog (analytics)
   { name: 'POSTHOG_API_KEY', description: 'PostHog analytics API key', required: false },
+
+  // OpenAI (AI rearrange feature)
+  { name: 'OPENAI_API_KEY', description: 'OpenAI API key for AI grid rearrangement', required: false },
 ];
 
 export class ConfigValidator {

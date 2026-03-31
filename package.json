@@ -42,6 +42,7 @@
     "form-data": "^4.0.5",
     "handlebars": "^4.7.8",
     "mailgun.js": "^12.1.1",
+    "openai": "^6.33.0",
     "pg": "^8.16.3",
     "posthog-node": "^5.28.6"
   }
