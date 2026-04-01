@@ -107,6 +107,10 @@ PARAMETERS — only include what's relevant:
   source_page   — integer source page (1-based), when the instruction scopes the
                   operation to a specific page ("on this page", "on page 2", "here",
                   "from page 3", etc.) — even when combined with a filter.
+                  IMPORTANT: "on this page" / "here" / "on the current page" means
+                  source_page = current page from GRID CONTEXT. Set this even when
+                  a filter is also present ("group dev tools on this page" →
+                  filter="dev tools", source_page=<current page>).
                   Never set for sort, rename, or remove.
   group_name    — folder name (new or existing). For create_group, if the user doesn't
                   state a name, infer a concise title-cased name from the filter
@@ -160,10 +164,12 @@ export async function classify(
   if (currentPage !== undefined) {
     contextLines.push(
       `The user is currently viewing page ${currentPage}. ` +
-        `When the instruction refers to 'this page', 'the current page', ` +
-        `'here', or similar, resolve it to page ${currentPage} — use ` +
-        `source_page=${currentPage} for move/group actions, or ` +
-        `target_page=${currentPage} for sort/rename actions.`
+        `When the instruction refers to 'this page', 'the current page', 'here', or similar:\n` +
+        `  - For move/group actions WITH a filter (e.g. "group dev tools on this page", ` +
+        `"move music apps on this page to page 3"): set source_page=${currentPage} ` +
+        `to restrict the candidate pool to this page. Also set target_page if a destination is stated.\n` +
+        `  - For sort/rename actions: set target_page=${currentPage}.\n` +
+        `  - For move/group ALL apps (no filter): set source_page=${currentPage}.`
     );
   }
 

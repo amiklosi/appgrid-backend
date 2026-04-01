@@ -39,7 +39,7 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       request.log.info(
-        { action: classified.action, confidence: classified.confidence, instruction },
+        { action: classified.action, confidence: classified.confidence, filter: classified.filter, filterType: classified.filterType, targetPage: classified.targetPage, sourcePage: classified.sourcePage, groupName: classified.groupName, instruction },
         'ai classify'
       );
 
