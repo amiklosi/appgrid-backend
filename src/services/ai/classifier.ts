@@ -104,8 +104,10 @@ PARAMETERS — only include what's relevant:
                                  (e.g. "browsers", "music apps", "uninstallers").
                   Use null if filter is null.
   target_page   — integer destination page (1-based), or null.
-  source_page   — integer source page (1-based), ONLY when the instruction says
-                  "all apps on page N". Never set for sort, rename, or remove.
+  source_page   — integer source page (1-based), when the instruction scopes the
+                  operation to a specific page ("on this page", "on page 2", "here",
+                  "from page 3", etc.) — even when combined with a filter.
+                  Never set for sort, rename, or remove.
   group_name    — folder name (new or existing). For create_group, if the user doesn't
                   state a name, infer a concise title-cased name from the filter
                   (e.g. filter "dev tools" → group_name "Dev Tools"). Never leave null
