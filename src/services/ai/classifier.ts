@@ -44,13 +44,15 @@ You support EXACTLY these operations — nothing else:
                   Example: "Move music apps to page 3", "Move everything on page 2 to page 5"
 
   create_group  — create a new named folder containing a specific set of apps
-                  Requires: a clear app filter OR a source page, AND an explicit group name.
+                  Requires: a clear app filter OR a source page. Group name is optional —
+                  if not stated, infer a sensible name from the filter (e.g. "dev tools" → "Dev Tools").
                   Optional: target_page — which page to place the folder on (default 1).
                   Example: "Put all browsers in a folder called Browsers"
+                  Example: "Group my dev tools on this page"
                   Example: "Put all browsers in a folder called Browsers on page 3"
 
   move_to_group — move a specific set of apps into an existing named folder
-                  Requires: a clear app filter, AND an explicit group name.
+                  Requires: a clear app filter AND an existing group name to move into.
                   Optional: target_page — which page to place the folder on if it needs to be created.
                   Example: "Move Spotify into the Music group"
                   Example: "Move Spotify into the Music group on page 2"
@@ -104,7 +106,10 @@ PARAMETERS — only include what's relevant:
   target_page   — integer destination page (1-based), or null.
   source_page   — integer source page (1-based), ONLY when the instruction says
                   "all apps on page N". Never set for sort, rename, or remove.
-  group_name    — folder name (new or existing).
+  group_name    — folder name (new or existing). For create_group, if the user doesn't
+                  state a name, infer a concise title-cased name from the filter
+                  (e.g. filter "dev tools" → group_name "Dev Tools"). Never leave null
+                  for create_group.
   new_name      — new name for rename operations.
   sort_order    — "alphabetical", "reverse_alphabetical", or "category".
   reason        — required when action=unknown; optional caveat otherwise.
