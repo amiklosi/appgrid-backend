@@ -36,6 +36,8 @@ export const RearrangeRequestSchema = Type.Object({
   grid: GridSchema,
   currentPage: Type.Optional(Type.Integer({ minimum: 1 })),
   maxItemsPerPage: Type.Optional(Type.Integer({ minimum: 1 })),
+  machineId: Type.Optional(Type.String()),
+  licenseKey: Type.Optional(Type.String()),
 });
 
 export type RearrangeRequest = Static<typeof RearrangeRequestSchema>;
@@ -79,13 +81,18 @@ export interface RemoveMutations {
   appIds: number[];
 }
 
+export interface UngroupMutations {
+  groupName: string;
+}
+
 export type AnyMutations =
   | MoveToPageMutations
   | GroupMutations
   | SortPageMutations
   | RenamePageMutations
   | RenameGroupMutations
-  | RemoveMutations;
+  | RemoveMutations
+  | UngroupMutations;
 
 // ---------------------------------------------------------------------------
 // Response

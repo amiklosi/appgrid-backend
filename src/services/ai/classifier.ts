@@ -13,6 +13,7 @@ export type ActionType =
   | 'sort_page'
   | 'rename_page'
   | 'rename_group'
+  | 'ungroup'
   | 'remove'
   | 'unknown';
 
@@ -46,7 +47,8 @@ You support EXACTLY these operations — nothing else:
   create_group  — create a new named folder containing a specific set of apps
                   Requires: a clear app filter OR a source page. Group name is optional —
                   if not stated, infer a sensible name from the filter (e.g. "dev tools" → "Dev Tools").
-                  Optional: target_page — which page to place the folder on (default 1).
+                  Optional: target_page — which page to place the folder on. Leave null if the
+                  user does not mention a specific page — the system will default to the current page.
                   Example: "Put all browsers in a folder called Browsers"
                   Example: "Group my dev tools on this page"
                   Example: "Put all browsers in a folder called Browsers on page 3"
@@ -54,6 +56,7 @@ You support EXACTLY these operations — nothing else:
   move_to_group — move a specific set of apps into an existing named folder
                   Requires: a clear app filter AND an existing group name to move into.
                   Optional: target_page — which page to place the folder on if it needs to be created.
+                  Leave null if no page is mentioned.
                   Example: "Move Spotify into the Music group"
                   Example: "Move Spotify into the Music group on page 2"
 
@@ -61,6 +64,13 @@ You support EXACTLY these operations — nothing else:
                   Requires: a specific page number, AND a sort order (alphabetical /
                   reverse_alphabetical / category).
                   Example: "Sort page 2 alphabetically"
+                  Example: "Sort this page alphabetically descending" → reverse_alphabetical
+                  Example: "Sort page 1 z to a" → reverse_alphabetical
+                  Example: "Sort by category" → category
+                  Natural language mappings for sort_order:
+                    alphabetical        — "a-z", "a to z", "ascending", "alphabetically"
+                    reverse_alphabetical — "z-a", "z to a", "descending", "reverse", "reverse alphabetical", "alphabetically descending"
+                    category            — "by category", "by type", "by kind"
 
   rename_page   — rename a single page
                   Requires: a specific page number or current name, AND a new name.
@@ -70,11 +80,16 @@ You support EXACTLY these operations — nothing else:
                   Requires: the current folder name AND a new name.
                   Example: "Rename the Games folder to Gaming"
 
+  ungroup       — dissolve a folder and return its apps to the page as loose items
+                  Requires: the folder name.
+                  Example: "Ungroup Browsers", "Dissolve the Games folder", "Remove the Music folder"
+
   remove        — remove a specific set of apps from the grid entirely
                   Requires: a clear app filter.
                   Example: "Remove all the uninstaller apps"
 
   unknown       — use this when the instruction does not map cleanly to one of the above.
+                  NOTE: "ungroup"/"dissolve"/"expand" a named folder = ungroup action, not unknown.
 
 CLASSIFY AS unknown (action="unknown") IN ALL OF THESE CASES — no exceptions:
   - The instruction asks for more than one of the above operations at once.
@@ -115,12 +130,14 @@ PARAMETERS — only include what's relevant:
   group_name    — folder name (new or existing). For create_group, if the user doesn't
                   state a name, infer a concise title-cased name from the filter
                   (e.g. filter "dev tools" → group_name "Dev Tools"). Never leave null
-                  for create_group.
+                  for create_group or ungroup.
   new_name      — new name for rename operations.
   sort_order    — "alphabetical", "reverse_alphabetical", or "category".
   reason        — required when action=unknown; optional caveat otherwise.
 
-RESPONSE — JSON only, no markdown:
+RESPONSE — JSON only, no markdown.
+
+Example for move_to_page:
 {
   "action": "move_to_page",
   "confidence": 0.97,
@@ -129,6 +146,20 @@ RESPONSE — JSON only, no markdown:
   "target_page": 6,
   "source_page": null,
   "group_name": null,
+  "new_name": null,
+  "sort_order": null,
+  "reason": null
+}
+
+Example for create_group (group_name MUST be non-null — infer from filter):
+{
+  "action": "create_group",
+  "confidence": 0.95,
+  "filter": "games",
+  "filter_type": "semantic",
+  "target_page": 1,
+  "source_page": null,
+  "group_name": "Games",
   "new_name": null,
   "sort_order": null,
   "reason": null
@@ -157,6 +188,8 @@ export async function classify(
   if (pageCount !== undefined) {
     contextLines.push(
       `The grid currently has ${pageCount} page(s). ` +
+        `When the instruction refers to 'the last page', 'the final page', or ` +
+        `'the end', set target_page=${pageCount}. ` +
         `When the instruction refers to 'a new page', 'the next page', or ` +
         `'a fresh page', set target_page=${pageCount + 1}.`
     );

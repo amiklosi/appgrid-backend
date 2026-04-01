@@ -125,14 +125,17 @@ model PaddlePurchase {
 }
 
 model DeviceActivation {
-  id                String   @id @default(uuid())
-  licenseId         String   @map("license_id")
-  deviceFingerprint String   @map("device_fingerprint")
-  deviceName        String?  @map("device_name")
-  ipAddress         String?  @map("ip_address")
-  userAgent         String?  @map("user_agent")
-  activatedAt       DateTime @default(now()) @map("activated_at")
-  lastSeenAt        DateTime @updatedAt @map("last_seen_at")
+  id                String    @id @default(uuid())
+  licenseId         String    @map("license_id")
+  deviceFingerprint String    @map("device_fingerprint")
+  deviceName        String?   @map("device_name")
+  ipAddress         String?   @map("ip_address")
+  userAgent         String?   @map("user_agent")
+  activatedAt       DateTime  @default(now()) @map("activated_at")
+  lastSeenAt        DateTime  @updatedAt @map("last_seen_at")
+  aiDailyCount      Int       @default(0) @map("ai_daily_count")
+  aiDailyResetAt    DateTime? @map("ai_daily_reset_at")
+  aiLifetimeCount   Int       @default(0) @map("ai_lifetime_count")
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 

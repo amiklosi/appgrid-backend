@@ -16,6 +16,7 @@ import {
   RenamePageMutations,
   RenameGroupMutations,
   RemoveMutations,
+  UngroupMutations,
 } from '../../schemas/ai.schema';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +57,9 @@ function extractJson(text: string): Record<string, unknown> {
   if (start === -1 || end === 0) {
     throw new Error(`No JSON in executor response: ${text.slice(0, 200)}`);
   }
-  return JSON.parse(text.slice(start, end));
+  // Strip JS-style line comments (// ...) before parsing — LLMs occasionally emit them
+  const json = text.slice(start, end).replace(/\/\/[^\n]*/g, '');
+  return JSON.parse(json);
 }
 
 // ---------------------------------------------------------------------------
@@ -138,16 +141,17 @@ export async function executeMoveToPage(
   maxItemsPerPage: number = 35,
   currentPage?: number
 ): Promise<ExecutorResult> {
-  // source_page set → deterministic, no LLM needed
-  if (ca.sourcePage !== null) {
+  // source_page set with no filter → deterministic, move all apps on that page
+  if (ca.sourcePage !== null && !ca.filter) {
     const sourcePage = grid.pages.find((p) => p.page === ca.sourcePage);
     if (!sourcePage) {
       return { success: false, confidence: 1.0, reason: `Page ${ca.sourcePage} not found`, mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
     }
-    const mutations: MoveToPageMutations = {
-      appIds: sourcePage.apps.map((a) => a.id),
-      targetPage: ca.targetPage!,
-    };
+    const appIds = [
+      ...sourcePage.apps.map((a) => a.id),
+      ...(sourcePage.groups ?? []).flatMap((g) => g.apps.map((a) => a.id)),
+    ];
+    const mutations: MoveToPageMutations = { appIds, targetPage: ca.targetPage! };
     return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
   }
 
@@ -213,8 +217,9 @@ export async function executeGroup(
   model: string,
   currentPage?: number
 ): Promise<ExecutorResult> {
-  const groupName = ca.groupName ?? 'New Group';
-  const targetPage = ca.targetPage ?? ca.sourcePage ?? 1;
+  const groupName = ca.groupName ?? null;
+  const resolvedGroupName = groupName ?? 'New Group';
+  const targetPage = ca.targetPage ?? ca.sourcePage ?? currentPage ?? 1;
   const semantic = ca.filterType === 'semantic';
 
   // source_page + no filter → deterministic
@@ -227,7 +232,7 @@ export async function executeGroup(
       ...sourcePage.apps.map((a) => a.id),
       ...(sourcePage.groups ?? []).flatMap((g) => g.apps.map((a) => a.id)),
     ];
-    const mutations: GroupMutations = { groupName, appIds, targetPage };
+    const mutations: GroupMutations = { groupName: resolvedGroupName, appIds, targetPage };
     return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
   }
 
@@ -250,6 +255,8 @@ export async function executeGroup(
     }
   }
 
+  console.log(`[executor] executeGroup sourcePage=${ca.sourcePage} candidateApps=${candidateApps.length}`);
+
   const appsRepr = JSON.stringify(
     candidateApps.map((a) =>
       semantic ? { id: a.id, name: a.name, bundle: a.bundle } : { id: a.id, name: a.name }
@@ -258,7 +265,8 @@ export async function executeGroup(
   const userMsg =
     `Apps:\n${appsRepr}\n\n` +
     (currentPage !== undefined ? `User is currently on page ${currentPage}.\n` : '') +
-    `Instruction: ${ca.filter ?? 'matching apps'} should go into a group named '${groupName}'.`;
+    `Instruction: ${ca.filter ?? 'matching apps'} should go into a group` +
+    (groupName ? ` named '${groupName}'` : ` (infer a concise title-cased name from the filter)`) + `.`;
 
   const resp = await client.chat.completions.create({
     model,
@@ -277,7 +285,7 @@ export async function executeGroup(
   const success = Boolean(data.success ?? true);
   const confidence = Number(data.confidence ?? 1.0);
   const reason = String(data.reason ?? '');
-  const name = String(data.name || groupName);
+  const name = String(data.name || groupName || 'New Group');
 
   const validCandidateIds = new Set(candidateApps.map((a) => a.id));
   const appIds = ((data.apps as unknown[]) ?? [])
@@ -399,6 +407,31 @@ export function executeRenameGroup(ca: ClassifiedAction, grid: Grid): ExecutorRe
 
   const mutations: RenameGroupMutations = { currentName, newName };
   return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+}
+
+// ---------------------------------------------------------------------------
+// ungroup  (deterministic — no LLM needed)
+// ---------------------------------------------------------------------------
+
+export function executeUngroup(ca: ClassifiedAction, grid: Grid): ExecutorResult {
+  const groupName = ca.groupName ?? '';
+
+  if (!groupName) {
+    return { success: false, confidence: 1.0, reason: 'No group name provided', mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  }
+
+  // Find the group across all pages
+  for (const page of grid.pages) {
+    const group = (page.groups ?? []).find(
+      (g) => g.name.toLowerCase() === groupName.toLowerCase()
+    );
+    if (group) {
+      const mutations: UngroupMutations = { groupName: group.name };
+      return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    }
+  }
+
+  return { success: false, confidence: 1.0, reason: `Group '${groupName}' not found`, mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,12 +1,14 @@
 import { FastifyPluginAsync } from 'fastify';
 import { openai } from '../lib/openai';
 import { classify } from '../services/ai/classifier';
+import { checkAndIncrementUsage } from '../services/ai/usage';
 import {
   executeMoveToPage,
   executeGroup,
   executeSortPage,
   executeRenamePage,
   executeRenameGroup,
+  executeUngroup,
   executeRemove,
 } from '../services/ai/executor';
 import { RearrangeRequestSchema } from '../schemas/ai.schema';
@@ -22,7 +24,22 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { instruction, grid, currentPage, maxItemsPerPage = 35 } = request.body as any;
+      const { instruction, grid, currentPage, maxItemsPerPage = 35, machineId, licenseKey } = request.body as any;
+
+      // ---------------------------------------------------------------------------
+      // 0. Usage check
+      // ---------------------------------------------------------------------------
+      request.log.info({ machineId, licenseKey }, 'ai usage check');
+      if (machineId && licenseKey) {
+        const usage = await checkAndIncrementUsage(licenseKey, machineId);
+        if (!usage.allowed) {
+          return reply.status(429).send({
+            error: 'AI usage limit reached',
+            reason: usage.reason,
+            limitType: usage.limitType,
+          });
+        }
+      }
 
       // ---------------------------------------------------------------------------
       // 1. Classify intent
@@ -101,6 +118,10 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
 
           case 'rename_group':
             result = executeRenameGroup(classified, grid);
+            break;
+
+          case 'ungroup':
+            result = executeUngroup(classified, grid);
             break;
 
           case 'remove':
