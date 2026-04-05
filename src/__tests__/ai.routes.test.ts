@@ -7,6 +7,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { FastifyInstance } from 'fastify';
 import { buildApp } from '../index';
+import { prismaMock } from './setup';
 
 // ---------------------------------------------------------------------------
 // Mock the OpenAI singleton so no real network calls are made
@@ -68,9 +69,13 @@ function mockClassify(overrides: object = {}) {
     newName: null,
     sortOrder: null,
     reason: null,
+    rawPrompt: '[]',
+    rawResponse: '{}',
     ...overrides,
   } as any);
 }
+
+const DET_FIELDS = { executorModel: null, rawPrompt: null, rawResponse: null };
 
 function mockExecuteGroup(overrides: object = {}) {
   vi.mocked(executeGroup).mockResolvedValue({
@@ -81,6 +86,9 @@ function mockExecuteGroup(overrides: object = {}) {
     inputTokens: 100,
     outputTokens: 20,
     costUsd: 0.0001,
+    executorModel: 'gpt-4.1',
+    rawPrompt: '[]',
+    rawResponse: '{}',
     ...overrides,
   });
 }
@@ -112,7 +120,7 @@ describe('POST /api/ai/rearrange', () => {
   // -------------------------------------------------------------------------
 
   describe('response contract', () => {
-    it('always returns action, success, confidence, reason, mutations', async () => {
+    it('always returns id, action, success, confidence, reason, mutations', async () => {
       mockClassify();
       mockExecuteGroup();
 
@@ -124,11 +132,22 @@ describe('POST /api/ai/rearrange', () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
+      expect(body).toHaveProperty('id');
       expect(body).toHaveProperty('action');
       expect(body).toHaveProperty('success');
       expect(body).toHaveProperty('confidence');
       expect(body).toHaveProperty('reason');
       expect(body).toHaveProperty('mutations');
+    });
+
+    it('id is a non-empty string', async () => {
+      mockClassify();
+      mockExecuteGroup();
+
+      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const id = res.json().id;
+      expect(typeof id).toBe('string');
+      expect(id.length).toBeGreaterThan(0);
     });
 
     it('success is a boolean', async () => {
@@ -145,6 +164,17 @@ describe('POST /api/ai/rearrange', () => {
 
       const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
       expect(typeof res.json().confidence).toBe('number');
+    });
+
+    it('unknown action also returns an id', async () => {
+      mockClassify({ action: 'unknown', confidence: 0, reason: 'Too vague' });
+
+      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body).toHaveProperty('id');
+      expect(typeof body.id).toBe('string');
+      expect(body.id.length).toBeGreaterThan(0);
     });
   });
 
@@ -199,7 +229,7 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify({ action: 'move_to_page', targetPage: 2, filter: 'music' });
       vi.mocked(executeMoveToPage).mockResolvedValue({
         success: true, confidence: 0.98, reason: '', mutations: { appIds: [2], targetPage: 2 },
-        inputTokens: 50, outputTokens: 10, costUsd: 0.00001,
+        inputTokens: 50, outputTokens: 10, costUsd: 0.00001, ...DET_FIELDS,
       });
 
       const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -235,7 +265,7 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify({ action: 'move_to_page', targetPage: 2 });
       vi.mocked(executeMoveToPage).mockResolvedValue({
         success: true, confidence: 0.95, reason: '', mutations: { appIds: [1], targetPage: 2 },
-        inputTokens: 50, outputTokens: 10, costUsd: 0.00001,
+        inputTokens: 50, outputTokens: 10, costUsd: 0.00001, ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -246,7 +276,7 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify({ action: 'sort_page', targetPage: 1, sortOrder: 'alphabetical' });
       vi.mocked(executeSortPage).mockResolvedValue({
         success: true, confidence: 1.0, reason: '', mutations: { page: 1, order: 'alphabetical' },
-        inputTokens: 0, outputTokens: 0, costUsd: 0,
+        inputTokens: 0, outputTokens: 0, costUsd: 0, ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -257,7 +287,7 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify({ action: 'rename_page', targetPage: 1, newName: 'Work' });
       vi.mocked(executeRenamePage).mockReturnValue({
         success: true, confidence: 1.0, reason: '', mutations: { page: 1, newName: 'Work' },
-        inputTokens: 0, outputTokens: 0, costUsd: 0,
+        inputTokens: 0, outputTokens: 0, costUsd: 0, ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -268,7 +298,7 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify({ action: 'rename_group', groupName: 'Browsers', newName: 'Web' });
       vi.mocked(executeRenameGroup).mockReturnValue({
         success: true, confidence: 1.0, reason: '', mutations: { currentName: 'Browsers', newName: 'Web' },
-        inputTokens: 0, outputTokens: 0, costUsd: 0,
+        inputTokens: 0, outputTokens: 0, costUsd: 0, ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -279,7 +309,7 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify({ action: 'ungroup', groupName: 'Browsers' });
       vi.mocked(executeUngroup).mockReturnValue({
         success: true, confidence: 1.0, reason: '', mutations: { groupName: 'Browsers' },
-        inputTokens: 0, outputTokens: 0, costUsd: 0,
+        inputTokens: 0, outputTokens: 0, costUsd: 0, ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -290,7 +320,7 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify({ action: 'remove', filter: 'uninstallers' });
       vi.mocked(executeRemove).mockResolvedValue({
         success: true, confidence: 0.95, reason: '', mutations: { appIds: [3] },
-        inputTokens: 50, outputTokens: 10, costUsd: 0.00001,
+        inputTokens: 50, outputTokens: 10, costUsd: 0.00001, ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -346,6 +376,131 @@ describe('POST /api/ai/rearrange', () => {
 
       const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
       expect(res.statusCode).toBe(502);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Outcome endpoint
+  // -------------------------------------------------------------------------
+
+  describe('PATCH /api/ai/rearrange/:id/outcome', () => {
+    const FAKE_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+    function mockPendingRecord(overrides: object = {}) {
+      prismaMock.aiRequest.findUnique.mockResolvedValue({
+        id: FAKE_ID,
+        machineId: 'test-machine',
+        licenseKey: null,
+        instruction: 'group browsers',
+        gridSnapshot: '{}',
+        currentPage: 1,
+        maxItemsPerPage: 35,
+        action: 'create_group',
+        confidence: 0.95,
+        reason: null,
+        success: true,
+        mutations: null,
+        classifierPrompt: null,
+        classifierResponse: null,
+        executorModel: null,
+        executorPrompt: null,
+        executorResponse: null,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        outcome: 'pending',
+        outcomeAt: null,
+        outcomeReason: null,
+        createdAt: new Date(),
+        durationMs: null,
+        ...overrides,
+      } as any);
+      prismaMock.aiRequest.update.mockResolvedValue({} as any);
+    }
+
+    it('marks a pending request as accepted', async () => {
+      mockPendingRecord();
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/ai/rearrange/${FAKE_ID}/outcome`,
+        payload: { machineId: 'test-machine', outcome: 'accepted' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
+    });
+
+    it('marks a pending request as undone', async () => {
+      mockPendingRecord();
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/ai/rearrange/${FAKE_ID}/outcome`,
+        payload: { machineId: 'test-machine', outcome: 'undone' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
+    });
+
+    it('marks a pending request as failed_to_apply with a reason', async () => {
+      mockPendingRecord();
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/ai/rearrange/${FAKE_ID}/outcome`,
+        payload: { machineId: 'test-machine', outcome: 'failed_to_apply', reason: 'Page 1 is full' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
+    });
+
+    it('returns 404 for an unknown id', async () => {
+      prismaMock.aiRequest.findUnique.mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: '/api/ai/rearrange/nonexistent-id/outcome',
+        payload: { machineId: 'test-machine', outcome: 'accepted' },
+      });
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 409 when outcome is already set', async () => {
+      mockPendingRecord({ outcome: 'accepted' });
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/ai/rearrange/${FAKE_ID}/outcome`,
+        payload: { machineId: 'test-machine', outcome: 'undone' },
+      });
+
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('returns 403 when machineId does not match', async () => {
+      mockPendingRecord({ machineId: 'machine-abc' });
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/ai/rearrange/${FAKE_ID}/outcome`,
+        payload: { machineId: 'different-machine', outcome: 'accepted' },
+      });
+
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('returns 400 for an invalid outcome value', async () => {
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/ai/rearrange/${FAKE_ID}/outcome`,
+        payload: { machineId: 'test-machine', outcome: 'invalid_value' },
+      });
+
+      expect(res.statusCode).toBe(400);
     });
   });
 });

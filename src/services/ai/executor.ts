@@ -31,6 +31,10 @@ export interface ExecutorResult {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  // Raw LLM data for persistence (null for deterministic executors)
+  executorModel: string | null;
+  rawPrompt: string | null;
+  rawResponse: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +64,19 @@ function extractJson(text: string): Record<string, unknown> {
   // Strip JS-style line comments (// ...) before parsing — LLMs occasionally emit them
   const json = text.slice(start, end).replace(/\/\/[^\n]*/g, '');
   return JSON.parse(json);
+}
+
+// ---------------------------------------------------------------------------
+// Helpers to build deterministic (no-LLM) results
+// ---------------------------------------------------------------------------
+
+function det(
+  success: boolean,
+  confidence: number,
+  reason: string,
+  mutations: AnyMutations | null
+): ExecutorResult {
+  return { success, confidence, reason, mutations, inputTokens: 0, outputTokens: 0, costUsd: 0, executorModel: null, rawPrompt: null, rawResponse: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -145,14 +162,14 @@ export async function executeMoveToPage(
   if (ca.sourcePage !== null && !ca.filter) {
     const sourcePage = grid.pages.find((p) => p.page === ca.sourcePage);
     if (!sourcePage) {
-      return { success: false, confidence: 1.0, reason: `Page ${ca.sourcePage} not found`, mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+      return det(false, 1.0, `Page ${ca.sourcePage} not found`, null);
     }
     const appIds = [
       ...sourcePage.apps.map((a) => a.id),
       ...(sourcePage.groups ?? []).flatMap((g) => g.apps.map((a) => a.id)),
     ];
     const mutations: MoveToPageMutations = { appIds, targetPage: ca.targetPage! };
-    return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    return det(true, 1.0, '', mutations);
   }
 
   const gridRepr = toJsonIds(grid);
@@ -162,12 +179,14 @@ export async function executeMoveToPage(
     `Instruction: Move ${ca.filter ?? 'matching apps'} to page ${ca.targetPage}.\n` +
     `Max ${maxItemsPerPage} apps per page.`;
 
+  const messages = [
+    { role: 'system' as const, content: MOVE_TO_PAGE_PROMPT },
+    { role: 'user' as const, content: userMsg },
+  ];
+
   const resp = await client.chat.completions.create({
     model,
-    messages: [
-      { role: 'system', content: MOVE_TO_PAGE_PROMPT },
-      { role: 'user', content: userMsg },
-    ],
+    messages,
     temperature: 0,
   });
 
@@ -188,7 +207,7 @@ export async function executeMoveToPage(
 
   const mutations: MoveToPageMutations = { appIds, targetPage: ca.targetPage! };
 
-  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok) };
+  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
 }
 
 // ---------------------------------------------------------------------------
@@ -226,14 +245,14 @@ export async function executeGroup(
   if (ca.sourcePage !== null && !ca.filter) {
     const sourcePage = grid.pages.find((p) => p.page === ca.sourcePage);
     if (!sourcePage) {
-      return { success: false, confidence: 1.0, reason: `Page ${ca.sourcePage} not found`, mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+      return det(false, 1.0, `Page ${ca.sourcePage} not found`, null);
     }
     const appIds = [
       ...sourcePage.apps.map((a) => a.id),
       ...(sourcePage.groups ?? []).flatMap((g) => g.apps.map((a) => a.id)),
     ];
     const mutations: GroupMutations = { groupName: resolvedGroupName, appIds, targetPage };
-    return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    return det(true, 1.0, '', mutations);
   }
 
   // Build candidate pool
@@ -241,7 +260,7 @@ export async function executeGroup(
   if (ca.sourcePage !== null) {
     const sourcePage = grid.pages.find((p) => p.page === ca.sourcePage);
     if (!sourcePage) {
-      return { success: false, confidence: 1.0, reason: `Page ${ca.sourcePage} not found`, mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+      return det(false, 1.0, `Page ${ca.sourcePage} not found`, null);
     }
     candidateApps = [
       ...sourcePage.apps,
@@ -268,12 +287,14 @@ export async function executeGroup(
     `Instruction: ${ca.filter ?? 'matching apps'} should go into a group` +
     (groupName ? ` named '${groupName}'` : ` (infer a concise title-cased name from the filter)`) + `.`;
 
+  const messages = [
+    { role: 'system' as const, content: GROUP_PROMPT },
+    { role: 'user' as const, content: userMsg },
+  ];
+
   const resp = await client.chat.completions.create({
     model,
-    messages: [
-      { role: 'system', content: GROUP_PROMPT },
-      { role: 'user', content: userMsg },
-    ],
+    messages,
     temperature: 0,
   });
 
@@ -293,11 +314,11 @@ export async function executeGroup(
     .filter((id) => !isNaN(id) && validCandidateIds.has(id));
 
   if (appIds.length === 0) {
-    return { success: false, confidence, reason: reason || 'No matching apps found', mutations: null, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok) };
+    return { success: false, confidence, reason: reason || 'No matching apps found', mutations: null, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
   }
 
   const mutations: GroupMutations = { groupName: name, appIds, targetPage };
-  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok) };
+  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
 }
 
 // ---------------------------------------------------------------------------
@@ -327,7 +348,7 @@ export async function executeSortPage(
   const pageNum = ca.targetPage!;
   const pageData = grid.pages.find((p) => p.page === pageNum);
   if (!pageData) {
-    return { success: false, confidence: 1.0, reason: `Page ${pageNum} not found`, mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    return det(false, 1.0, `Page ${pageNum} not found`, null);
   }
 
   const sortOrder = (ca.sortOrder ?? 'alphabetical') as SortPageMutations['order'];
@@ -335,7 +356,7 @@ export async function executeSortPage(
   // Alphabetical sorts are deterministic — return the order, Swift applies it
   if (sortOrder === 'alphabetical' || sortOrder === 'reverse_alphabetical') {
     const mutations: SortPageMutations = { page: pageNum, order: sortOrder };
-    return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    return det(true, 1.0, '', mutations);
   }
 
   // Category sort — needs LLM
@@ -348,12 +369,14 @@ export async function executeSortPage(
     apps: allPageApps.map((a) => ({ id: a.id, name: a.name, bundle: a.bundle })),
   });
 
+  const messages = [
+    { role: 'system' as const, content: SORT_PROMPT },
+    { role: 'user' as const, content: `Page:\n${pageRepr}\n\nSort order: category` },
+  ];
+
   const resp = await client.chat.completions.create({
     model,
-    messages: [
-      { role: 'system', content: SORT_PROMPT },
-      { role: 'user', content: `Page:\n${pageRepr}\n\nSort order: category` },
-    ],
+    messages,
     temperature: 0,
   });
 
@@ -368,7 +391,7 @@ export async function executeSortPage(
   const orderedAppIds = ((data.order as unknown[]) ?? []).map(Number).filter((id) => !isNaN(id));
 
   const mutations: SortPageMutations = { page: pageNum, order: 'category', orderedAppIds };
-  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok) };
+  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
 }
 
 // ---------------------------------------------------------------------------
@@ -380,14 +403,14 @@ export function executeRenamePage(ca: ClassifiedAction, grid: Grid): ExecutorRes
   const newName = ca.newName ?? '';
 
   if (!newName) {
-    return { success: false, confidence: 1.0, reason: 'No new name provided', mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    return det(false, 1.0, 'No new name provided', null);
   }
   if (!pageNum || !grid.pages.find((p) => p.page === pageNum)) {
-    return { success: false, confidence: 1.0, reason: `Page ${pageNum} not found`, mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    return det(false, 1.0, `Page ${pageNum} not found`, null);
   }
 
   const mutations: RenamePageMutations = { page: pageNum, newName };
-  return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  return det(true, 1.0, '', mutations);
 }
 
 export function executeRenameGroup(ca: ClassifiedAction, grid: Grid): ExecutorResult {
@@ -395,18 +418,18 @@ export function executeRenameGroup(ca: ClassifiedAction, grid: Grid): ExecutorRe
   const newName = ca.newName ?? '';
 
   if (!currentName || !newName) {
-    return { success: false, confidence: 1.0, reason: 'Missing old or new group name', mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    return det(false, 1.0, 'Missing old or new group name', null);
   }
 
   const exists = grid.pages.some((p) =>
     (p.groups ?? []).some((g) => g.name.toLowerCase() === currentName.toLowerCase())
   );
   if (!exists) {
-    return { success: false, confidence: 1.0, reason: `Group '${currentName}' not found`, mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    return det(false, 1.0, `Group '${currentName}' not found`, null);
   }
 
   const mutations: RenameGroupMutations = { currentName, newName };
-  return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  return det(true, 1.0, '', mutations);
 }
 
 // ---------------------------------------------------------------------------
@@ -417,7 +440,7 @@ export function executeUngroup(ca: ClassifiedAction, grid: Grid): ExecutorResult
   const groupName = ca.groupName ?? '';
 
   if (!groupName) {
-    return { success: false, confidence: 1.0, reason: 'No group name provided', mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    return det(false, 1.0, 'No group name provided', null);
   }
 
   // Find the group across all pages
@@ -427,11 +450,11 @@ export function executeUngroup(ca: ClassifiedAction, grid: Grid): ExecutorResult
     );
     if (group) {
       const mutations: UngroupMutations = { groupName: group.name };
-      return { success: true, confidence: 1.0, reason: '', mutations, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+      return det(true, 1.0, '', mutations);
     }
   }
 
-  return { success: false, confidence: 1.0, reason: `Group '${groupName}' not found`, mutations: null, inputTokens: 0, outputTokens: 0, costUsd: 0 };
+  return det(false, 1.0, `Group '${groupName}' not found`, null);
 }
 
 // ---------------------------------------------------------------------------
@@ -462,12 +485,14 @@ export async function executeRemove(
   const appsRepr = allAppsJson(grid, semantic);
   const userMsg = `Apps:\n${appsRepr}\n\nFilter: ${ca.filter ?? 'apps to remove'}`;
 
+  const messages = [
+    { role: 'system' as const, content: REMOVE_PROMPT },
+    { role: 'user' as const, content: userMsg },
+  ];
+
   const resp = await client.chat.completions.create({
     model,
-    messages: [
-      { role: 'system', content: REMOVE_PROMPT },
-      { role: 'user', content: userMsg },
-    ],
+    messages,
     temperature: 0,
   });
 
@@ -486,9 +511,9 @@ export async function executeRemove(
     .filter((id) => !isNaN(id) && validIds.has(id));
 
   if (appIds.length === 0) {
-    return { success: false, confidence, reason: reason || 'No matching apps found', mutations: null, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok) };
+    return { success: false, confidence, reason: reason || 'No matching apps found', mutations: null, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
   }
 
   const mutations: RemoveMutations = { appIds };
-  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok) };
+  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
 }

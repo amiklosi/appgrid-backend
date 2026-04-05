@@ -28,6 +28,9 @@ export interface ClassifiedAction {
   newName: string | null;
   sortOrder: 'alphabetical' | 'reverse_alphabetical' | 'category' | null;
   reason: string | null;
+  // Raw LLM data for persistence
+  rawPrompt: string;
+  rawResponse: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,12 +219,14 @@ export async function classify(
     );
   }
 
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: 'system', content: system },
+    { role: 'user', content: instruction },
+  ];
+
   const response = await client.chat.completions.create({
     model,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: instruction },
-    ],
+    messages,
     temperature: 0,
     response_format: { type: 'json_object' },
   });
@@ -240,6 +245,8 @@ export async function classify(
     newName: data.new_name ? String(data.new_name) : null,
     sortOrder: data.sort_order ? (String(data.sort_order) as ClassifiedAction['sortOrder']) : null,
     reason: data.reason ? String(data.reason) : null,
+    rawPrompt: JSON.stringify(messages),
+    rawResponse: raw,
   };
 }
 

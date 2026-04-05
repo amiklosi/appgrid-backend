@@ -99,6 +99,7 @@ export type AnyMutations =
 // ---------------------------------------------------------------------------
 
 export const RearrangeResponseSchema = Type.Object({
+  id: Type.String(),
   action: Type.String(),
   success: Type.Boolean(),
   confidence: Type.Number(),
@@ -107,3 +108,22 @@ export const RearrangeResponseSchema = Type.Object({
 });
 
 export type RearrangeResponse = Static<typeof RearrangeResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Outcome endpoint
+// ---------------------------------------------------------------------------
+
+export const VALID_OUTCOMES = ['accepted', 'undone', 'failed_to_apply'] as const;
+export type OutcomeValue = (typeof VALID_OUTCOMES)[number];
+
+export const OutcomeRequestSchema = Type.Object({
+  machineId: Type.String({ minLength: 1 }),
+  outcome: Type.Union(VALID_OUTCOMES.map((o) => Type.Literal(o)) as any),
+  reason: Type.Optional(Type.String()),
+});
+
+export type OutcomeRequest = Static<typeof OutcomeRequestSchema>;
+
+export const OutcomeResponseSchema = Type.Object({
+  success: Type.Boolean(),
+});

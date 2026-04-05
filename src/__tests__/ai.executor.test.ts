@@ -33,6 +33,8 @@ function baseCA(overrides: Partial<ClassifiedAction> = {}): ClassifiedAction {
     newName: null,
     sortOrder: null,
     reason: null,
+    rawPrompt: '[]',
+    rawResponse: '{}',
     ...overrides,
   };
 }
