@@ -12,8 +12,8 @@ import { prisma } from '../../lib/prisma';
 // ---------------------------------------------------------------------------
 
 export const AI_LIMITS = {
-  trial: { daily: 10, lifetime: 30 },
-  pro:   { daily: 50, lifetime: 500 },
+  trial: { daily: 5, lifetime: 20 },
+  pro:   { daily: 30, lifetime: 500 },
 } as const;
 
 export type UsageCheckResult =
@@ -55,10 +55,13 @@ export async function checkAndIncrementUsage(
 
   // Check lifetime limit
   if (activation.aiLifetimeCount >= limits.lifetime) {
+    const isTrial = activation.license.isTrial;
     return {
       allowed: false,
       limitType: 'lifetime',
-      reason: `You've used all ${limits.lifetime} lifetime AI requests included with your license. Credits coming soon.`,
+      reason: isTrial
+        ? `You've used all your trial AI requests. Upgrade to Pro for more.`
+        : `You've used all ${limits.lifetime} AI requests included with your license. Additional credit packs will be available soon — stay tuned!`,
     };
   }
 

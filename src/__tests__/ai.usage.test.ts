@@ -76,7 +76,7 @@ describe('checkAndIncrementUsage', () => {
       expect(result.allowed).toBe(false);
       if (!result.allowed) {
         expect(result.limitType).toBe('lifetime');
-        expect(result.reason).toMatch(/lifetime/i);
+        expect(result.reason).toMatch(/credit packs/i);
       }
     });
 
