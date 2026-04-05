@@ -32,7 +32,7 @@ export const GridSchema = Type.Object({
 // ---------------------------------------------------------------------------
 
 export const RearrangeRequestSchema = Type.Object({
-  instruction: Type.String({ minLength: 1 }),
+  instruction: Type.String({ minLength: 1, maxLength: 500 }),
   grid: GridSchema,
   currentPage: Type.Optional(Type.Integer({ minimum: 1 })),
   maxItemsPerPage: Type.Optional(Type.Integer({ minimum: 1 })),

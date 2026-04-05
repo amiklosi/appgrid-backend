@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type OpenAI from 'openai';
-import { executeGroup, executeMoveToPage, executeRenamePage, executeRenameGroup, executeUngroup } from '../services/ai/executor';
+import { executeGroup, executeMoveToPage, executeSortPage, executeRenamePage, executeRenameGroup, executeUngroup } from '../services/ai/executor';
 import type { ClassifiedAction } from '../services/ai/classifier';
 import type { Grid } from '../schemas/ai.schema';
 
@@ -464,5 +464,202 @@ describe('executeRenameGroup', () => {
     const result = executeRenameGroup(ca, grid);
     expect(result.success).toBe(false);
     expect(result.reason).toMatch(/not found/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ISSUE-03: null targetPage guard
+// ---------------------------------------------------------------------------
+
+describe('executeMoveToPage — null targetPage guard (ISSUE-03)', () => {
+  const grid: Grid = {
+    pages: [
+      { page: 1, apps: [{ id: 1, name: 'Chrome', bundle: 'com.google.Chrome' }], groups: [] },
+    ],
+  };
+
+  it('returns success=false on deterministic path when targetPage is null', async () => {
+    const client = makeClient('should not be called');
+    const ca = baseCA({ action: 'move_to_page', sourcePage: 1, targetPage: null, filter: null, filterType: null, groupName: null });
+    const result = await executeMoveToPage(ca, grid, client, 'gpt-4.1-mini', 35);
+
+    expect(client.chat.completions.create).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.mutations).toBeNull();
+  });
+
+  it('returns success=false on LLM path when targetPage is null', async () => {
+    const client = makeClient(JSON.stringify({
+      moves: [{ id: 1, name: 'Chrome', to_page: 2 }],
+      success: true, confidence: 0.95, reason: '',
+    }));
+    const ca = baseCA({ action: 'move_to_page', targetPage: null, filter: 'browsers', filterType: 'semantic', groupName: null });
+    const result = await executeMoveToPage(ca, grid, client, 'gpt-4.1-mini', 35);
+
+    expect(result.success).toBe(false);
+    expect(result.mutations).toBeNull();
+  });
+});
+
+describe('executeSortPage — null targetPage guard (ISSUE-03)', () => {
+  const grid: Grid = {
+    pages: [{ page: 1, apps: [{ id: 1, name: 'Chrome', bundle: 'com.google.Chrome' }], groups: [] }],
+  };
+
+  it('returns success=false when targetPage is null', async () => {
+    const client = makeClient('should not be called');
+    const ca = baseCA({ action: 'sort_page', targetPage: null, sortOrder: 'alphabetical' });
+    const result = await executeSortPage(ca, grid, client, 'gpt-4.1-mini');
+
+    expect(result.success).toBe(false);
+    expect(result.mutations).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ISSUE-06: category sort permutation validation
+// ---------------------------------------------------------------------------
+
+describe('executeSortPage — category sort permutation (ISSUE-06)', () => {
+  const grid: Grid = {
+    pages: [{
+      page: 1,
+      apps: [
+        { id: 1, name: 'Chrome', bundle: 'com.google.Chrome' },
+        { id: 2, name: 'Spotify', bundle: 'com.spotify.client' },
+        { id: 3, name: 'Xcode', bundle: 'com.apple.dt.Xcode' },
+      ],
+      groups: [],
+    }],
+  };
+
+  it('drops phantom IDs and appends missing IDs to ensure full permutation', async () => {
+    // LLM returns id 9999 (phantom) and omits id 3
+    const client = makeClient(JSON.stringify({
+      page: 1, order: [2, 9999, 1], success: true, confidence: 0.95, reason: '',
+    }));
+    const ca = baseCA({ action: 'sort_page', targetPage: 1, sortOrder: 'category', filter: null, filterType: null });
+    const result = await executeSortPage(ca, grid, client, 'gpt-4.1-mini');
+
+    const { orderedAppIds } = result.mutations as any;
+    // Phantom ID dropped, missing ID 3 appended
+    expect(orderedAppIds).toEqual([2, 1, 3]);
+    expect(orderedAppIds).not.toContain(9999);
+  });
+
+  it('deduplicates IDs returned by the LLM', async () => {
+    // LLM returns id 1 twice
+    const client = makeClient(JSON.stringify({
+      page: 1, order: [1, 1, 2, 3], success: true, confidence: 0.95, reason: '',
+    }));
+    const ca = baseCA({ action: 'sort_page', targetPage: 1, sortOrder: 'category', filter: null, filterType: null });
+    const result = await executeSortPage(ca, grid, client, 'gpt-4.1-mini');
+
+    const { orderedAppIds } = result.mutations as any;
+    expect(orderedAppIds).toEqual([1, 2, 3]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ISSUE-07: group name sanitization
+// ---------------------------------------------------------------------------
+
+describe('executeGroup — group name sanitization (ISSUE-07)', () => {
+  it('trims whitespace from LLM-returned group name', async () => {
+    const client = makeClient(JSON.stringify({
+      name: '  Dev Tools  ', apps: [50], success: true, confidence: 0.95, reason: '',
+    }));
+    const result = await executeGroup(baseCA({ filter: 'dev tools' }), SIMPLE_GRID, client, 'gpt-4.1-mini');
+
+    expect((result.mutations as any).groupName).toBe('Dev Tools');
+  });
+
+  it('caps group name at 64 characters', async () => {
+    const longName = 'A'.repeat(100);
+    const client = makeClient(JSON.stringify({
+      name: longName, apps: [50], success: true, confidence: 0.95, reason: '',
+    }));
+    const result = await executeGroup(baseCA({ filter: 'games' }), SIMPLE_GRID, client, 'gpt-4.1-mini');
+
+    expect((result.mutations as any).groupName).toHaveLength(64);
+  });
+
+  it('falls back to "New Group" when LLM returns whitespace-only name', async () => {
+    const client = makeClient(JSON.stringify({
+      name: '   ', apps: [50], success: true, confidence: 0.95, reason: '',
+    }));
+    const result = await executeGroup(baseCA({ filter: 'games', groupName: null }), SIMPLE_GRID, client, 'gpt-4.1-mini');
+
+    expect((result.mutations as any).groupName).toBe('New Group');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ISSUE-08: targetPage validation in executeGroup
+// ---------------------------------------------------------------------------
+
+describe('executeGroup — targetPage existence check (ISSUE-08)', () => {
+  it('returns success=false when targetPage does not exist in grid', async () => {
+    const client = makeClient('should not be called');
+    // SIMPLE_GRID only has page 1; targetPage 99 doesn't exist
+    const ca = baseCA({ action: 'create_group', targetPage: 99, sourcePage: null, filter: 'games' });
+    const result = await executeGroup(ca, SIMPLE_GRID, client, 'gpt-4.1-mini');
+
+    expect(client.chat.completions.create).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.mutations).toBeNull();
+    expect(result.reason).toMatch(/not found/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ISSUE-09: rename newName trimming and length cap
+// ---------------------------------------------------------------------------
+
+describe('executeRenamePage — newName sanitization (ISSUE-09)', () => {
+  const grid: Grid = {
+    pages: [{ page: 1, title: 'Main', apps: [], groups: [] }],
+  };
+
+  it('trims whitespace from newName', () => {
+    const ca = baseCA({ action: 'rename_page', targetPage: 1, newName: '  Work  ', filter: null, filterType: null });
+    const result = executeRenamePage(ca, grid);
+    expect(result.success).toBe(true);
+    expect((result.mutations as any).newName).toBe('Work');
+  });
+
+  it('caps newName at 64 characters', () => {
+    const longName = 'B'.repeat(100);
+    const ca = baseCA({ action: 'rename_page', targetPage: 1, newName: longName, filter: null, filterType: null });
+    const result = executeRenamePage(ca, grid);
+    expect(result.success).toBe(true);
+    expect((result.mutations as any).newName).toHaveLength(64);
+  });
+
+  it('returns success=false when newName is whitespace-only after trim', () => {
+    const ca = baseCA({ action: 'rename_page', targetPage: 1, newName: '   ', filter: null, filterType: null });
+    const result = executeRenamePage(ca, grid);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('executeRenameGroup — newName sanitization (ISSUE-09)', () => {
+  const grid: Grid = {
+    pages: [{ page: 1, apps: [], groups: [{ id: 1, name: 'Browsers', apps: [] }] }],
+  };
+
+  it('trims whitespace from newName', () => {
+    const ca = baseCA({ action: 'rename_group', groupName: 'Browsers', newName: '  Web  ', filter: null, filterType: null });
+    const result = executeRenameGroup(ca, grid);
+    expect(result.success).toBe(true);
+    expect((result.mutations as any).newName).toBe('Web');
+  });
+
+  it('caps newName at 64 characters', () => {
+    const longName = 'C'.repeat(100);
+    const ca = baseCA({ action: 'rename_group', groupName: 'Browsers', newName: longName, filter: null, filterType: null });
+    const result = executeRenameGroup(ca, grid);
+    expect(result.success).toBe(true);
+    expect((result.mutations as any).newName).toHaveLength(64);
   });
 });

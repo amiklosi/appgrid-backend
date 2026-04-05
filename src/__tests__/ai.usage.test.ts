@@ -18,6 +18,8 @@ function makeActivation(overrides: object = {}) {
 describe('checkAndIncrementUsage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Make $transaction execute the callback immediately with the mock as the tx argument
+    prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock));
   });
 
   // -------------------------------------------------------------------------

@@ -87,36 +87,41 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // ---------------------------------------------------------------------------
-      // 0. Usage check
+      // 0. Require both machineId and licenseKey — no anonymous AI calls
+      // ---------------------------------------------------------------------------
+      if (!machineId || !licenseKey) {
+        return reply.status(401).send({ error: 'machineId and licenseKey are required' });
+      }
+
+      // ---------------------------------------------------------------------------
+      // 0b. Usage check
       // ---------------------------------------------------------------------------
       request.log.info({ machineId, licenseKey }, 'ai usage check');
-      if (machineId && licenseKey) {
-        const usage = await checkAndIncrementUsage(licenseKey, machineId);
-        if (!usage.allowed) {
-          // Persist as not_applicable (rate limited — never reached the LLM)
-          const id = await persistRequest({
-            action: 'rate_limited',
-            confidence: 1,
-            reason: usage.reason ?? 'Usage limit reached',
-            success: false,
-            mutations: null,
-            classifierPrompt: null,
-            classifierResponse: null,
-            executorModel: null,
-            executorPrompt: null,
-            executorResponse: null,
-            inputTokens: 0,
-            outputTokens: 0,
-            costUsd: 0,
-            outcome: 'not_applicable',
-          });
-          return reply.status(429).send({
-            id,
-            error: 'AI usage limit reached',
-            reason: usage.reason,
-            limitType: usage.limitType,
-          });
-        }
+      const usage = await checkAndIncrementUsage(licenseKey, machineId);
+      if (!usage.allowed) {
+        // Persist as not_applicable (rate limited — never reached the LLM)
+        const id = await persistRequest({
+          action: 'rate_limited',
+          confidence: 1,
+          reason: usage.reason ?? 'Usage limit reached',
+          success: false,
+          mutations: null,
+          classifierPrompt: null,
+          classifierResponse: null,
+          executorModel: null,
+          executorPrompt: null,
+          executorResponse: null,
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          outcome: 'not_applicable',
+        });
+        return reply.status(429).send({
+          id,
+          error: 'AI usage limit reached',
+          reason: usage.reason,
+          limitType: usage.limitType,
+        });
       }
 
       // ---------------------------------------------------------------------------
@@ -171,14 +176,24 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       // ---------------------------------------------------------------------------
       // 3. Validate classifier output
       // ---------------------------------------------------------------------------
-      if (
+      const pageCount = grid.pages.length;
+      const maxPageNum = grid.pages.length > 0 ? Math.max(...grid.pages.map((p: { page: number }) => p.page)) : 0;
+
+      const targetPageInvalid =
         classified.targetPage !== null &&
-        classified.targetPage > grid.pages.length + 1
-      ) {
+        (classified.targetPage < 1 || classified.targetPage > maxPageNum + 1);
+
+      const sourcePageInvalid =
+        classified.sourcePage !== null &&
+        (classified.sourcePage < 1 || classified.sourcePage > maxPageNum);
+
+      if (targetPageInvalid || sourcePageInvalid) {
+        const badPage = targetPageInvalid ? classified.targetPage : classified.sourcePage;
+        const reason = `Page ${badPage} is out of range. The grid has ${pageCount} page(s).`;
         const id = await persistRequest({
           action: classified.action,
           confidence: classified.confidence,
-          reason: `Page ${classified.targetPage} doesn't exist. The grid has ${grid.pages.length} page(s).`,
+          reason,
           success: false,
           mutations: null,
           classifierPrompt: classified.rawPrompt,
@@ -196,7 +211,7 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
           action: classified.action,
           success: false,
           confidence: classified.confidence,
-          reason: `Page ${classified.targetPage} doesn't exist. The grid has ${grid.pages.length} page(s).`,
+          reason,
           mutations: null,
         });
       }
@@ -330,7 +345,7 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(404).send({ error: 'AI request not found' });
       }
 
-      if (record.machineId && record.machineId !== machineId) {
+      if (!record.machineId || record.machineId !== machineId) {
         return reply.status(403).send({ error: 'Machine ID mismatch' });
       }
 

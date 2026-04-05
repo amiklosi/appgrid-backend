@@ -55,6 +55,8 @@ const BASE_REQUEST = {
   grid: MINIMAL_GRID,
   currentPage: 1,
   maxItemsPerPage: 35,
+  machineId: 'test-machine-001',
+  licenseKey: 'TEST-LICENSE-KEY',
 };
 
 function mockClassify(overrides: object = {}) {
@@ -106,6 +108,12 @@ describe('POST /api/ai/rearrange', () => {
     process.env.PADDLE_API_KEY = 'test_paddle_api_key';
     process.env.MAILGUN_API_KEY = 'test-mailgun-key';
     process.env.MAILGUN_DOMAIN = 'test.mailgun.org';
+
+    // Make $transaction pass through to the mock client (needed by checkAndIncrementUsage)
+    prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock));
+
+    // Default: usage check allowed (no activation found → pass through)
+    prismaMock.deviceActivation.findFirst.mockResolvedValue(null as any);
 
     app = await buildApp();
     await app.ready();
@@ -220,7 +228,7 @@ describe('POST /api/ai/rearrange', () => {
       const body = res.json();
       expect(body.success).toBe(false);
       expect(body.mutations).toBeNull();
-      expect(body.reason).toMatch(/doesn't exist/i);
+      expect(body.reason).toMatch(/out of range/i);
       expect(executeMoveToPage).not.toHaveBeenCalled();
     });
 
@@ -349,6 +357,94 @@ describe('POST /api/ai/rearrange', () => {
         payload: { instruction: 'group browsers' },
       });
       expect(res.statusCode).toBe(400);
+    });
+
+    // ISSUE-11: instruction length cap
+    it('rejects instruction longer than 500 characters with 400', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: { ...BASE_REQUEST, instruction: 'a'.repeat(501) },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('accepts instruction exactly 500 characters', async () => {
+      mockClassify();
+      mockExecuteGroup();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: { ...BASE_REQUEST, instruction: 'a'.repeat(500) },
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    // ISSUE-02: machineId / licenseKey required
+    it('returns 401 when machineId is missing', async () => {
+      const { machineId: _, ...withoutMachineId } = BASE_REQUEST;
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: withoutMachineId,
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('returns 401 when licenseKey is missing', async () => {
+      const { licenseKey: _, ...withoutLicenseKey } = BASE_REQUEST;
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: withoutLicenseKey,
+      });
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Page bounds validation — extended (ISSUE-04)
+  // -------------------------------------------------------------------------
+
+  describe('page bounds validation — extended (ISSUE-04)', () => {
+    it('rejects targetPage = 0', async () => {
+      mockClassify({ action: 'move_to_page', targetPage: 0, sourcePage: null });
+
+      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.mutations).toBeNull();
+      expect(body.reason).toMatch(/out of range/i);
+    });
+
+    it('rejects negative targetPage', async () => {
+      mockClassify({ action: 'move_to_page', targetPage: -1, sourcePage: null });
+
+      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+
+      expect(res.json().success).toBe(false);
+      expect(res.json().reason).toMatch(/out of range/i);
+    });
+
+    it('rejects sourcePage = 0', async () => {
+      mockClassify({ action: 'move_to_page', targetPage: 1, sourcePage: 0 });
+
+      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+
+      expect(res.json().success).toBe(false);
+      expect(res.json().reason).toMatch(/out of range/i);
+    });
+
+    it('rejects sourcePage beyond page count', async () => {
+      // MINIMAL_GRID has 1 page; sourcePage 5 is invalid
+      mockClassify({ action: 'move_to_page', targetPage: 1, sourcePage: 5 });
+
+      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+
+      expect(res.json().success).toBe(false);
+      expect(res.json().reason).toMatch(/out of range/i);
     });
   });
 
@@ -501,6 +597,19 @@ describe('POST /api/ai/rearrange', () => {
       });
 
       expect(res.statusCode).toBe(400);
+    });
+
+    // ISSUE-10: records with null machineId must not be claimable by anyone
+    it('returns 403 when record has null machineId (ISSUE-10)', async () => {
+      mockPendingRecord({ machineId: null });
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/ai/rearrange/${FAKE_ID}/outcome`,
+        payload: { machineId: 'any-machine', outcome: 'accepted' },
+      });
+
+      expect(res.statusCode).toBe(403);
     });
   });
 });

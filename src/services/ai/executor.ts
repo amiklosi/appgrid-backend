@@ -61,7 +61,9 @@ function extractJson(text: string): Record<string, unknown> {
   if (start === -1 || end === 0) {
     throw new Error(`No JSON in executor response: ${text.slice(0, 200)}`);
   }
-  // Strip JS-style line comments (// ...) before parsing — LLMs occasionally emit them
+  // Strip JS-style line comments (// ...) before parsing — LLMs occasionally emit them.
+  // Note: executor calls use response_format json_object which prevents this, but we keep
+  // the strip as a safety net for any legacy/fallback responses.
   const json = text.slice(start, end).replace(/\/\/[^\n]*/g, '');
   return JSON.parse(json);
 }
@@ -160,6 +162,9 @@ export async function executeMoveToPage(
 ): Promise<ExecutorResult> {
   // source_page set with no filter → deterministic, move all apps on that page
   if (ca.sourcePage !== null && !ca.filter) {
+    if (ca.targetPage == null) {
+      return det(false, 1.0, 'No target page specified', null);
+    }
     const sourcePage = grid.pages.find((p) => p.page === ca.sourcePage);
     if (!sourcePage) {
       return det(false, 1.0, `Page ${ca.sourcePage} not found`, null);
@@ -168,7 +173,7 @@ export async function executeMoveToPage(
       ...sourcePage.apps.map((a) => a.id),
       ...(sourcePage.groups ?? []).flatMap((g) => g.apps.map((a) => a.id)),
     ];
-    const mutations: MoveToPageMutations = { appIds, targetPage: ca.targetPage! };
+    const mutations: MoveToPageMutations = { appIds, targetPage: ca.targetPage };
     return det(true, 1.0, '', mutations);
   }
 
@@ -188,6 +193,7 @@ export async function executeMoveToPage(
     model,
     messages,
     temperature: 0,
+    response_format: { type: 'json_object' },
   });
 
   const raw = resp.choices[0].message.content ?? '';
@@ -200,12 +206,16 @@ export async function executeMoveToPage(
   const reason = String(data.reason ?? '');
   const moves = (data.moves as Array<{ id: number; to_page: number }>) ?? [];
 
+  if (ca.targetPage == null) {
+    return det(false, 1.0, 'No target page specified', null);
+  }
+
   const validIds = allAppIds(grid);
   const appIds = moves
     .filter((m) => m.id != null && validIds.has(Number(m.id)))
     .map((m) => Number(m.id));
 
-  const mutations: MoveToPageMutations = { appIds, targetPage: ca.targetPage! };
+  const mutations: MoveToPageMutations = { appIds, targetPage: ca.targetPage };
 
   return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
 }
@@ -240,6 +250,11 @@ export async function executeGroup(
   const resolvedGroupName = groupName ?? 'New Group';
   const targetPage = ca.targetPage ?? ca.sourcePage ?? currentPage ?? 1;
   const semantic = ca.filterType === 'semantic';
+
+  // Validate targetPage exists in the grid (ISSUE-08)
+  if (!grid.pages.find((p) => p.page === targetPage)) {
+    return det(false, 1.0, `Target page ${targetPage} not found in grid`, null);
+  }
 
   // source_page + no filter → deterministic
   if (ca.sourcePage !== null && !ca.filter) {
@@ -296,6 +311,7 @@ export async function executeGroup(
     model,
     messages,
     temperature: 0,
+    response_format: { type: 'json_object' },
   });
 
   const raw = resp.choices[0].message.content ?? '';
@@ -306,7 +322,7 @@ export async function executeGroup(
   const success = Boolean(data.success ?? true);
   const confidence = Number(data.confidence ?? 1.0);
   const reason = String(data.reason ?? '');
-  const name = String(data.name || groupName || 'New Group');
+  const name = String(data.name || groupName || 'New Group').trim().slice(0, 64) || 'New Group';
 
   const validCandidateIds = new Set(candidateApps.map((a) => a.id));
   const appIds = ((data.apps as unknown[]) ?? [])
@@ -345,7 +361,10 @@ export async function executeSortPage(
   client: OpenAI,
   model: string
 ): Promise<ExecutorResult> {
-  const pageNum = ca.targetPage!;
+  if (ca.targetPage == null) {
+    return det(false, 1.0, 'No target page specified for sort', null);
+  }
+  const pageNum = ca.targetPage;
   const pageData = grid.pages.find((p) => p.page === pageNum);
   if (!pageData) {
     return det(false, 1.0, `Page ${pageNum} not found`, null);
@@ -378,6 +397,7 @@ export async function executeSortPage(
     model,
     messages,
     temperature: 0,
+    response_format: { type: 'json_object' },
   });
 
   const raw = resp.choices[0].message.content ?? '';
@@ -388,7 +408,20 @@ export async function executeSortPage(
   const success = Boolean(data.success ?? true);
   const confidence = Number(data.confidence ?? 1.0);
   const reason = String(data.reason ?? '');
-  const orderedAppIds = ((data.order as unknown[]) ?? []).map(Number).filter((id) => !isNaN(id));
+  const rawOrderedIds = ((data.order as unknown[]) ?? []).map(Number).filter((id) => !isNaN(id));
+
+  // Validate: result must be a permutation of the page's actual app IDs (ISSUE-06)
+  const expectedIds = new Set(allPageApps.map((a) => a.id));
+  // Keep only IDs that belong to this page (no phantoms, no cross-page IDs)
+  const seen = new Set<number>();
+  const validOrdered = rawOrderedIds.filter((id) => {
+    if (!expectedIds.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  // Append any IDs the LLM omitted so Swift always gets the full set
+  const missingIds = allPageApps.map((a) => a.id).filter((id) => !seen.has(id));
+  const orderedAppIds = [...validOrdered, ...missingIds];
 
   const mutations: SortPageMutations = { page: pageNum, order: 'category', orderedAppIds };
   return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
@@ -400,7 +433,7 @@ export async function executeSortPage(
 
 export function executeRenamePage(ca: ClassifiedAction, grid: Grid): ExecutorResult {
   const pageNum = ca.targetPage ?? ca.sourcePage;
-  const newName = ca.newName ?? '';
+  const newName = (ca.newName ?? '').trim().slice(0, 64);
 
   if (!newName) {
     return det(false, 1.0, 'No new name provided', null);
@@ -415,7 +448,7 @@ export function executeRenamePage(ca: ClassifiedAction, grid: Grid): ExecutorRes
 
 export function executeRenameGroup(ca: ClassifiedAction, grid: Grid): ExecutorResult {
   const currentName = ca.groupName ?? '';
-  const newName = ca.newName ?? '';
+  const newName = (ca.newName ?? '').trim().slice(0, 64);
 
   if (!currentName || !newName) {
     return det(false, 1.0, 'Missing old or new group name', null);
@@ -494,6 +527,7 @@ export async function executeRemove(
     model,
     messages,
     temperature: 0,
+    response_format: { type: 'json_object' },
   });
 
   const raw = resp.choices[0].message.content ?? '';
