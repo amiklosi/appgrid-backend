@@ -125,14 +125,17 @@ model PaddlePurchase {
 }
 
 model DeviceActivation {
-  id                String   @id @default(uuid())
-  licenseId         String   @map("license_id")
-  deviceFingerprint String   @map("device_fingerprint")
-  deviceName        String?  @map("device_name")
-  ipAddress         String?  @map("ip_address")
-  userAgent         String?  @map("user_agent")
-  activatedAt       DateTime @default(now()) @map("activated_at")
-  lastSeenAt        DateTime @updatedAt @map("last_seen_at")
+  id                String    @id @default(uuid())
+  licenseId         String    @map("license_id")
+  deviceFingerprint String    @map("device_fingerprint")
+  deviceName        String?   @map("device_name")
+  ipAddress         String?   @map("ip_address")
+  userAgent         String?   @map("user_agent")
+  activatedAt       DateTime  @default(now()) @map("activated_at")
+  lastSeenAt        DateTime  @updatedAt @map("last_seen_at")
+  aiDailyCount      Int       @default(0) @map("ai_daily_count")
+  aiDailyResetAt    DateTime? @map("ai_daily_reset_at")
+  aiLifetimeCount   Int       @default(0) @map("ai_lifetime_count")
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
@@ -169,6 +172,54 @@ model WebhookEvent {
   @@index([source, eventType])
   @@index([createdAt])
   @@map("webhook_events")
+}
+
+model AiRequest {
+  id String @id @default(uuid())
+
+  // Who made the request
+  machineId  String? @map("machine_id")
+  licenseKey String? @map("license_key")
+
+  // Input
+  instruction     String
+  gridSnapshot    String  @map("grid_snapshot") // full serialized grid JSON
+  currentPage     Int?    @map("current_page")
+  maxItemsPerPage Int?    @map("max_items_per_page")
+
+  // Classification result
+  action     String
+  confidence Float  @default(0)
+  reason     String?
+
+  // Execution result
+  success   Boolean @default(false)
+  mutations String? // JSON of mutations payload
+
+  // LLM raw data
+  classifierPrompt    String? @map("classifier_prompt")
+  classifierResponse  String? @map("classifier_response")
+  executorModel       String? @map("executor_model")
+  executorPrompt      String? @map("executor_prompt")
+  executorResponse    String? @map("executor_response")
+  inputTokens         Int     @default(0) @map("input_tokens")
+  outputTokens        Int     @default(0) @map("output_tokens")
+  costUsd             Float   @default(0) @map("cost_usd")
+
+  // User outcome: "pending" | "accepted" | "undone" | "failed_to_apply" | "not_applicable"
+  outcome   String    @default("pending")
+  outcomeAt DateTime? @map("outcome_at")
+  outcomeReason String? @map("outcome_reason") // populated for failed_to_apply
+
+  // Timing
+  createdAt  DateTime @default(now()) @map("created_at")
+  durationMs Int?     @map("duration_ms")
+
+  @@index([machineId])
+  @@index([licenseKey])
+  @@index([outcome])
+  @@index([createdAt])
+  @@map("ai_requests")
 }
 
 enum EmailStatus {

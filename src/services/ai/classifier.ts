@@ -1,0 +1,266 @@
+/**
+ * classifier.ts
+ * Classifies a free-text grid instruction into a structured action + parameters.
+ * Single cheap gpt-4.1-nano call using JSON mode. Ported from classifier.py.
+ */
+
+import OpenAI from 'openai';
+
+export type ActionType =
+  | 'move_to_page'
+  | 'create_group'
+  | 'move_to_group'
+  | 'sort_page'
+  | 'rename_page'
+  | 'rename_group'
+  | 'ungroup'
+  | 'remove'
+  | 'unknown';
+
+export interface ClassifiedAction {
+  action: ActionType;
+  confidence: number;
+  filter: string | null;
+  filterType: 'name_based' | 'semantic' | null;
+  targetPage: number | null;
+  sourcePage: number | null;
+  groupName: string | null;
+  newName: string | null;
+  sortOrder: 'alphabetical' | 'reverse_alphabetical' | 'category' | null;
+  reason: string | null;
+  // Raw LLM data for persistence
+  rawPrompt: string;
+  rawResponse: string;
+}
+
+// ---------------------------------------------------------------------------
+// System prompt — verbatim port from classifier.py
+// ---------------------------------------------------------------------------
+
+const BASE_SYSTEM_PROMPT = `\
+You are an intent classifier for a macOS app launcher grid assistant.
+The user will give a free-text instruction about rearranging their app grid.
+
+You support EXACTLY these operations — nothing else:
+
+  move_to_page  — move a specific set of apps to a single named/numbered page
+                  Requires: a clear app filter OR a source page, AND a specific target page.
+                  Example: "Move music apps to page 3", "Move everything on page 2 to page 5"
+
+  create_group  — create a new named folder containing a specific set of apps
+                  Requires: a clear app filter OR a source page. Group name is optional —
+                  if not stated, infer a sensible name from the filter (e.g. "dev tools" → "Dev Tools").
+                  Optional: target_page — which page to place the folder on. Leave null if the
+                  user does not mention a specific page — the system will default to the current page.
+                  Example: "Put all browsers in a folder called Browsers"
+                  Example: "Group my dev tools on this page"
+                  Example: "Put all browsers in a folder called Browsers on page 3"
+
+  move_to_group — move a specific set of apps into an existing named folder
+                  Requires: a clear app filter AND an existing group name to move into.
+                  Optional: target_page — which page to place the folder on if it needs to be created.
+                  Leave null if no page is mentioned.
+                  Example: "Move Spotify into the Music group"
+                  Example: "Move Spotify into the Music group on page 2"
+
+  sort_page     — sort apps on a single specific page
+                  Requires: a specific page number, AND a sort order (alphabetical /
+                  reverse_alphabetical / category).
+                  Example: "Sort page 2 alphabetically"
+                  Example: "Sort this page alphabetically descending" → reverse_alphabetical
+                  Example: "Sort page 1 z to a" → reverse_alphabetical
+                  Example: "Sort by category" → category
+                  Natural language mappings for sort_order:
+                    alphabetical        — "a-z", "a to z", "ascending", "alphabetically"
+                    reverse_alphabetical — "z-a", "z to a", "descending", "reverse", "reverse alphabetical", "alphabetically descending"
+                    category            — "by category", "by type", "by kind"
+
+  rename_page   — rename a single page
+                  Requires: a specific page number or current name, AND a new name.
+                  Example: "Rename page 3 to Work"
+
+  rename_group  — rename an existing folder
+                  Requires: the current folder name AND a new name.
+                  Example: "Rename the Games folder to Gaming"
+
+  ungroup       — dissolve a folder and return its apps to the page as loose items
+                  Requires: the folder name.
+                  Example: "Ungroup Browsers", "Dissolve the Games folder", "Remove the Music folder"
+
+  remove        — remove a specific set of apps from the grid entirely
+                  Requires: a clear app filter.
+                  Example: "Remove all the uninstaller apps"
+
+  unknown       — use this when the instruction does not map cleanly to one of the above.
+                  NOTE: "ungroup"/"dissolve"/"expand" a named folder = ungroup action, not unknown.
+
+CLASSIFY AS unknown (action="unknown") IN ALL OF THESE CASES — no exceptions:
+  - The instruction asks for more than one of the above operations at once.
+    → reason: "Please give one instruction at a time."
+  - The instruction is vague or open-ended with no specific target
+    (e.g. "organise my grid", "make sensible groups", "clean up page 1", "make it look nice").
+    → reason: "Too vague — please be specific, e.g. 'put browsers in a folder called Browsers'."
+  - The instruction asks a question or requests information about the grid.
+    → reason: "I can only rearrange apps, not answer questions about the grid."
+  - The instruction asks to move or reorder an entire folder/group as a unit.
+    → reason: "I can move apps into or out of groups, but not move a whole group to another page."
+  - The instruction targets a specific grid position (row, column, slot).
+    → reason: "I can move apps to a page but not to a specific row or column."
+  - The instruction asks to undo, revert, or restore a previous state.
+    → reason: "Undo is not supported."
+  - The instruction does not clearly fit one of the seven supported operations above.
+    → reason: "I can only move apps, create/rename groups, sort or rename pages, and remove apps."
+
+PARAMETERS — only include what's relevant:
+  filter        — natural-language description of which apps to act on.
+                  Use null if source_page is set instead.
+  filter_type   — how the filter should be applied:
+                  "name_based" — filter is a rule about the app's displayed name
+                                 (e.g. "starts with A", "contains 'pro'", "named Spotify").
+                  "semantic"   — filter is a category or concept that requires
+                                 knowledge of what the app does
+                                 (e.g. "browsers", "music apps", "uninstallers").
+                  Use null if filter is null.
+  target_page   — integer destination page (1-based), or null.
+  source_page   — integer source page (1-based), when the instruction scopes the
+                  operation to a specific page ("on this page", "on page 2", "here",
+                  "from page 3", etc.) — even when combined with a filter.
+                  IMPORTANT: "on this page" / "here" / "on the current page" means
+                  source_page = current page from GRID CONTEXT. Set this even when
+                  a filter is also present ("group dev tools on this page" →
+                  filter="dev tools", source_page=<current page>).
+                  Never set for sort, rename, or remove.
+  group_name    — folder name (new or existing). For create_group, if the user doesn't
+                  state a name, infer a concise title-cased name from the filter
+                  (e.g. filter "dev tools" → group_name "Dev Tools"). Never leave null
+                  for create_group or ungroup.
+  new_name      — new name for rename operations.
+  sort_order    — "alphabetical", "reverse_alphabetical", or "category".
+  reason        — required when action=unknown; optional caveat otherwise.
+
+RESPONSE — JSON only, no markdown.
+
+Example for move_to_page:
+{
+  "action": "move_to_page",
+  "confidence": 0.97,
+  "filter": "music apps",
+  "filter_type": "semantic",
+  "target_page": 6,
+  "source_page": null,
+  "group_name": null,
+  "new_name": null,
+  "sort_order": null,
+  "reason": null
+}
+
+Example for create_group (group_name MUST be non-null — infer from filter):
+{
+  "action": "create_group",
+  "confidence": 0.95,
+  "filter": "games",
+  "filter_type": "semantic",
+  "target_page": 1,
+  "source_page": null,
+  "group_name": "Games",
+  "new_name": null,
+  "sort_order": null,
+  "reason": null
+}
+
+Always include all 10 fields. Use null for fields that don't apply.
+`;
+
+// ---------------------------------------------------------------------------
+// Classifier
+// ---------------------------------------------------------------------------
+
+export async function classify(
+  instruction: string,
+  client: OpenAI,
+  options: {
+    pageCount?: number;
+    currentPage?: number;
+    model?: string;
+  } = {}
+): Promise<ClassifiedAction> {
+  const { pageCount, currentPage, model = 'gpt-4.1-nano' } = options;
+
+  // Inject grid context (mirrors classifier.py context injection)
+  const contextLines: string[] = [];
+  if (pageCount !== undefined) {
+    contextLines.push(
+      `The grid currently has ${pageCount} page(s). ` +
+        `When the instruction refers to 'the last page', 'the final page', or ` +
+        `'the end', set target_page=${pageCount}. ` +
+        `When the instruction refers to 'a new page', 'the next page', or ` +
+        `'a fresh page', set target_page=${pageCount + 1}.`
+    );
+  }
+  if (currentPage !== undefined) {
+    contextLines.push(
+      `The user is currently viewing page ${currentPage}. ` +
+        `When the instruction refers to 'this page', 'the current page', 'here', or similar:\n` +
+        `  - For move/group actions WITH a filter (e.g. "group dev tools on this page", ` +
+        `"move music apps on this page to page 3"): set source_page=${currentPage} ` +
+        `to restrict the candidate pool to this page. Also set target_page if a destination is stated.\n` +
+        `  - For sort/rename actions: set target_page=${currentPage}.\n` +
+        `  - For move/group ALL apps (no filter): set source_page=${currentPage}.`
+    );
+  }
+
+  let system = BASE_SYSTEM_PROMPT;
+  if (contextLines.length > 0) {
+    const contextBlock =
+      '\n\nGRID CONTEXT:\n' + contextLines.map((l) => `- ${l}`).join('\n');
+    system = system.replace(
+      'CLASSIFY AS unknown',
+      contextBlock + '\n\nCLASSIFY AS unknown'
+    );
+  }
+
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+    { role: 'system', content: system },
+    { role: 'user', content: instruction },
+  ];
+
+  const response = await client.chat.completions.create({
+    model,
+    messages,
+    temperature: 0,
+    response_format: { type: 'json_object' },
+  });
+
+  const raw = response.choices[0].message.content ?? '';
+  const data = extractJson(raw);
+
+  return {
+    action: (data.action as ActionType) ?? 'unknown',
+    confidence: Number(data.confidence ?? 0),
+    filter: data.filter ? String(data.filter) : null,
+    filterType: data.filter_type ? (String(data.filter_type) as ClassifiedAction['filterType']) : null,
+    targetPage: data.target_page != null ? Number(data.target_page) : null,
+    sourcePage: data.source_page != null ? Number(data.source_page) : null,
+    groupName: data.group_name ? String(data.group_name) : null,
+    newName: data.new_name ? String(data.new_name) : null,
+    sortOrder: data.sort_order ? (String(data.sort_order) as ClassifiedAction['sortOrder']) : null,
+    reason: data.reason ? String(data.reason) : null,
+    rawPrompt: JSON.stringify(messages),
+    rawResponse: raw,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function extractJson(text: string): Record<string, unknown> {
+  // Strip markdown code fences if present
+  text = text.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim();
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}') + 1;
+  if (start === -1 || end === 0) {
+    throw new Error(`No JSON object in classifier response: ${text.slice(0, 200)}`);
+  }
+  return JSON.parse(text.slice(start, end));
+}

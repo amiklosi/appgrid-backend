@@ -119,6 +119,11 @@ if [ -z "$POSTHOG_API_KEY" ]; then
     exit 1
 fi
 
+if [ -z "$OPENAI_API_KEY" ]; then
+    print_error "OPENAI_API_KEY not set in .env"
+    exit 1
+fi
+
 print_status "🚀 Starting Portainer deployment..."
 print_status "Portainer URL: ${PORTAINER_URL}"
 print_status "Stack Name: ${PORTAINER_STACK_NAME}"
@@ -174,7 +179,8 @@ if [ -z "$STACK_ID" ]; then
     {"name": "AXIOM_TOKEN", "value": "${AXIOM_TOKEN}"},
     {"name": "AXIOM_DATASET", "value": "${AXIOM_DATASET}"},
     {"name": "TRIAL_DURATION_DAYS", "value": "${TRIAL_DURATION_DAYS}"},
-    {"name": "POSTHOG_API_KEY", "value": "${POSTHOG_API_KEY}"}
+    {"name": "POSTHOG_API_KEY", "value": "${POSTHOG_API_KEY}"},
+    {"name": "OPENAI_API_KEY", "value": "${OPENAI_API_KEY}"}
   ]
 }
 EOF
@@ -209,7 +215,8 @@ else
     {"name": "AXIOM_TOKEN", "value": "${AXIOM_TOKEN}"},
     {"name": "AXIOM_DATASET", "value": "${AXIOM_DATASET}"},
     {"name": "TRIAL_DURATION_DAYS", "value": "${TRIAL_DURATION_DAYS}"},
-    {"name": "POSTHOG_API_KEY", "value": "${POSTHOG_API_KEY}"}
+    {"name": "POSTHOG_API_KEY", "value": "${POSTHOG_API_KEY}"},
+    {"name": "OPENAI_API_KEY", "value": "${OPENAI_API_KEY}"}
   ],
   "prune": false,
   "pullImage": true
