@@ -42,11 +42,11 @@ export interface ExecutorResult {
 // ---------------------------------------------------------------------------
 
 const MODEL_COSTS: Record<string, { input: number; output: number }> = {
-  'gpt-4.1-nano': { input: 0.10, output: 0.40 },
-  'gpt-4.1-mini': { input: 0.40, output: 1.60 },
-  'gpt-4o-mini':  { input: 0.15, output: 0.60 },
-  'gpt-4.1':      { input: 2.00, output: 8.00 },
-  'gpt-4o':       { input: 2.50, output: 10.00 },
+  'gpt-4.1-nano': { input: 0.1, output: 0.4 },
+  'gpt-4.1-mini': { input: 0.4, output: 1.6 },
+  'gpt-4o-mini': { input: 0.15, output: 0.6 },
+  'gpt-4.1': { input: 2.0, output: 8.0 },
+  'gpt-4o': { input: 2.5, output: 10.0 },
 };
 
 function calcCost(model: string, inTok: number, outTok: number): number {
@@ -55,7 +55,10 @@ function calcCost(model: string, inTok: number, outTok: number): number {
 }
 
 function extractJson(text: string): Record<string, unknown> {
-  text = text.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim();
+  text = text
+    .replace(/```(?:json)?\s*/g, '')
+    .replace(/```/g, '')
+    .trim();
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}') + 1;
   if (start === -1 || end === 0) {
@@ -78,7 +81,18 @@ function det(
   reason: string,
   mutations: AnyMutations | null
 ): ExecutorResult {
-  return { success, confidence, reason, mutations, inputTokens: 0, outputTokens: 0, costUsd: 0, executorModel: null, rawPrompt: null, rawResponse: null };
+  return {
+    success,
+    confidence,
+    reason,
+    mutations,
+    inputTokens: 0,
+    outputTokens: 0,
+    costUsd: 0,
+    executorModel: null,
+    rawPrompt: null,
+    rawResponse: null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -110,11 +124,15 @@ function allAppsJson(grid: Grid, includeBundle: boolean): string {
   const apps: object[] = [];
   for (const page of grid.pages) {
     for (const a of page.apps) {
-      apps.push(includeBundle ? { id: a.id, name: a.name, bundle: a.bundle } : { id: a.id, name: a.name });
+      apps.push(
+        includeBundle ? { id: a.id, name: a.name, bundle: a.bundle } : { id: a.id, name: a.name }
+      );
     }
     for (const g of page.groups ?? []) {
       for (const a of g.apps) {
-        apps.push(includeBundle ? { id: a.id, name: a.name, bundle: a.bundle } : { id: a.id, name: a.name });
+        apps.push(
+          includeBundle ? { id: a.id, name: a.name, bundle: a.bundle } : { id: a.id, name: a.name }
+        );
       }
     }
   }
@@ -177,6 +195,10 @@ export async function executeMoveToPage(
     return det(true, 1.0, '', mutations);
   }
 
+  if (ca.targetPage == null) {
+    return det(false, 1.0, 'No target page specified', null);
+  }
+
   const gridRepr = toJsonIds(grid);
   const userMsg =
     `Grid:\n${gridRepr}\n\n` +
@@ -206,10 +228,6 @@ export async function executeMoveToPage(
   const reason = String(data.reason ?? '');
   const moves = (data.moves as Array<{ id: number; to_page: number }>) ?? [];
 
-  if (ca.targetPage == null) {
-    return det(false, 1.0, 'No target page specified', null);
-  }
-
   const validIds = allAppIds(grid);
   const appIds = moves
     .filter((m) => m.id != null && validIds.has(Number(m.id)))
@@ -217,7 +235,18 @@ export async function executeMoveToPage(
 
   const mutations: MoveToPageMutations = { appIds, targetPage: ca.targetPage };
 
-  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
+  return {
+    success,
+    confidence,
+    reason,
+    mutations,
+    inputTokens: inTok,
+    outputTokens: outTok,
+    costUsd: calcCost(model, inTok, outTok),
+    executorModel: model,
+    rawPrompt: JSON.stringify(messages),
+    rawResponse: raw,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -277,10 +306,7 @@ export async function executeGroup(
     if (!sourcePage) {
       return det(false, 1.0, `Page ${ca.sourcePage} not found`, null);
     }
-    candidateApps = [
-      ...sourcePage.apps,
-      ...(sourcePage.groups ?? []).flatMap((g) => g.apps),
-    ];
+    candidateApps = [...sourcePage.apps, ...(sourcePage.groups ?? []).flatMap((g) => g.apps)];
   } else {
     candidateApps = [];
     for (const page of grid.pages) {
@@ -288,8 +314,6 @@ export async function executeGroup(
       (page.groups ?? []).forEach((g) => candidateApps.push(...g.apps));
     }
   }
-
-  console.log(`[executor] executeGroup sourcePage=${ca.sourcePage} candidateApps=${candidateApps.length}`);
 
   const appsRepr = JSON.stringify(
     candidateApps.map((a) =>
@@ -300,7 +324,8 @@ export async function executeGroup(
     `Apps:\n${appsRepr}\n\n` +
     (currentPage !== undefined ? `User is currently on page ${currentPage}.\n` : '') +
     `Instruction: ${ca.filter ?? 'matching apps'} should go into a group` +
-    (groupName ? ` named '${groupName}'` : ` (infer a concise title-cased name from the filter)`) + `.`;
+    (groupName ? ` named '${groupName}'` : ` (infer a concise title-cased name from the filter)`) +
+    `.`;
 
   const messages = [
     { role: 'system' as const, content: GROUP_PROMPT },
@@ -322,7 +347,10 @@ export async function executeGroup(
   const success = Boolean(data.success ?? true);
   const confidence = Number(data.confidence ?? 1.0);
   const reason = String(data.reason ?? '');
-  const name = String(data.name || groupName || 'New Group').trim().slice(0, 64) || 'New Group';
+  const name =
+    String(data.name || groupName || 'New Group')
+      .trim()
+      .slice(0, 64) || 'New Group';
 
   const validCandidateIds = new Set(candidateApps.map((a) => a.id));
   const appIds = ((data.apps as unknown[]) ?? [])
@@ -330,11 +358,33 @@ export async function executeGroup(
     .filter((id) => !isNaN(id) && validCandidateIds.has(id));
 
   if (appIds.length === 0) {
-    return { success: false, confidence, reason: reason || 'No matching apps found', mutations: null, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
+    return {
+      success: false,
+      confidence,
+      reason: reason || 'No matching apps found',
+      mutations: null,
+      inputTokens: inTok,
+      outputTokens: outTok,
+      costUsd: calcCost(model, inTok, outTok),
+      executorModel: model,
+      rawPrompt: JSON.stringify(messages),
+      rawResponse: raw,
+    };
   }
 
   const mutations: GroupMutations = { groupName: name, appIds, targetPage };
-  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
+  return {
+    success,
+    confidence,
+    reason,
+    mutations,
+    inputTokens: inTok,
+    outputTokens: outTok,
+    costUsd: calcCost(model, inTok, outTok),
+    executorModel: model,
+    rawPrompt: JSON.stringify(messages),
+    rawResponse: raw,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -379,10 +429,7 @@ export async function executeSortPage(
   }
 
   // Category sort — needs LLM
-  const allPageApps = [
-    ...pageData.apps,
-    ...(pageData.groups ?? []).flatMap((g) => g.apps),
-  ];
+  const allPageApps = [...pageData.apps, ...(pageData.groups ?? []).flatMap((g) => g.apps)];
   const pageRepr = JSON.stringify({
     page: pageNum,
     apps: allPageApps.map((a) => ({ id: a.id, name: a.name, bundle: a.bundle })),
@@ -424,7 +471,18 @@ export async function executeSortPage(
   const orderedAppIds = [...validOrdered, ...missingIds];
 
   const mutations: SortPageMutations = { page: pageNum, order: 'category', orderedAppIds };
-  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
+  return {
+    success,
+    confidence,
+    reason,
+    mutations,
+    inputTokens: inTok,
+    outputTokens: outTok,
+    costUsd: calcCost(model, inTok, outTok),
+    executorModel: model,
+    rawPrompt: JSON.stringify(messages),
+    rawResponse: raw,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -478,9 +536,7 @@ export function executeUngroup(ca: ClassifiedAction, grid: Grid): ExecutorResult
 
   // Find the group across all pages
   for (const page of grid.pages) {
-    const group = (page.groups ?? []).find(
-      (g) => g.name.toLowerCase() === groupName.toLowerCase()
-    );
+    const group = (page.groups ?? []).find((g) => g.name.toLowerCase() === groupName.toLowerCase());
     if (group) {
       const mutations: UngroupMutations = { groupName: group.name };
       return det(true, 1.0, '', mutations);
@@ -545,9 +601,31 @@ export async function executeRemove(
     .filter((id) => !isNaN(id) && validIds.has(id));
 
   if (appIds.length === 0) {
-    return { success: false, confidence, reason: reason || 'No matching apps found', mutations: null, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
+    return {
+      success: false,
+      confidence,
+      reason: reason || 'No matching apps found',
+      mutations: null,
+      inputTokens: inTok,
+      outputTokens: outTok,
+      costUsd: calcCost(model, inTok, outTok),
+      executorModel: model,
+      rawPrompt: JSON.stringify(messages),
+      rawResponse: raw,
+    };
   }
 
   const mutations: RemoveMutations = { appIds };
-  return { success, confidence, reason, mutations, inputTokens: inTok, outputTokens: outTok, costUsd: calcCost(model, inTok, outTok), executorModel: model, rawPrompt: JSON.stringify(messages), rawResponse: raw };
+  return {
+    success,
+    confidence,
+    reason,
+    mutations,
+    inputTokens: inTok,
+    outputTokens: outTok,
+    costUsd: calcCost(model, inTok, outTok),
+    executorModel: model,
+    rawPrompt: JSON.stringify(messages),
+    rawResponse: raw,
+  };
 }

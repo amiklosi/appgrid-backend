@@ -12,8 +12,8 @@ import { prisma } from '../../lib/prisma';
 // ---------------------------------------------------------------------------
 
 export const AI_LIMITS = {
-  trial: { daily: 5, lifetime: 20 },
-  pro:   { daily: 30, lifetime: 500 },
+  trial: { daily: 10, lifetime: 30 },
+  pro: { daily: 30, lifetime: 500 },
 } as const;
 
 export type UsageCheckResult =
@@ -44,8 +44,13 @@ export async function checkAndIncrementUsage(
     });
 
     if (!activation) {
-      // No activation found — don't block, just allow (license validation is separate)
-      return { allowed: true };
+      // No activation found — block the request. A fabricated or unrecognised
+      // (licenseKey, machineId) pair would otherwise bypass all rate limits.
+      return {
+        allowed: false,
+        limitType: 'lifetime' as const,
+        reason: 'Device not recognised. Please activate your license on this device first.',
+      };
     }
 
     const limits = activation.license.isTrial ? AI_LIMITS.trial : AI_LIMITS.pro;
@@ -83,8 +88,8 @@ export async function checkAndIncrementUsage(
     await tx.deviceActivation.update({
       where: { id: activation.id },
       data: {
-        aiDailyCount:    isNewDay ? 1 : { increment: 1 },
-        aiDailyResetAt:  isNewDay ? now : undefined,
+        aiDailyCount: isNewDay ? 1 : { increment: 1 },
+        aiDailyResetAt: isNewDay ? now : undefined,
         aiLifetimeCount: { increment: 1 },
       },
     });

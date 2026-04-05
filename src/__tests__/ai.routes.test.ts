@@ -112,8 +112,17 @@ describe('POST /api/ai/rearrange', () => {
     // Make $transaction pass through to the mock client (needed by checkAndIncrementUsage)
     prismaMock.$transaction.mockImplementation((fn: any) => fn(prismaMock));
 
-    // Default: usage check allowed (no activation found → pass through)
-    prismaMock.deviceActivation.findFirst.mockResolvedValue(null as any);
+    // Default: usage check allowed — return a real activation under limits
+    prismaMock.deviceActivation.findFirst.mockResolvedValue({
+      id: 'act-1',
+      licenseId: 'lic-1',
+      deviceFingerprint: 'test-machine-001',
+      aiDailyCount: 0,
+      aiDailyResetAt: null,
+      aiLifetimeCount: 0,
+      license: { isTrial: false },
+    } as any);
+    prismaMock.deviceActivation.update.mockResolvedValue({} as any);
 
     app = await buildApp();
     await app.ready();
@@ -152,7 +161,11 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify();
       mockExecuteGroup();
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
       const id = res.json().id;
       expect(typeof id).toBe('string');
       expect(id.length).toBeGreaterThan(0);
@@ -162,7 +175,11 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify();
       mockExecuteGroup();
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
       expect(typeof res.json().success).toBe('boolean');
     });
 
@@ -170,14 +187,22 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify();
       mockExecuteGroup();
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
       expect(typeof res.json().confidence).toBe('number');
     });
 
     it('unknown action also returns an id', async () => {
       mockClassify({ action: 'unknown', confidence: 0, reason: 'Too vague' });
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body).toHaveProperty('id');
@@ -194,7 +219,11 @@ describe('POST /api/ai/rearrange', () => {
     it('returns success=false and mutations=null without calling executor', async () => {
       mockClassify({ action: 'unknown', confidence: 0, reason: 'Too vague' });
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -206,9 +235,17 @@ describe('POST /api/ai/rearrange', () => {
     });
 
     it('surfaces the classifier reason to the caller', async () => {
-      mockClassify({ action: 'unknown', confidence: 0, reason: 'Please give one instruction at a time.' });
+      mockClassify({
+        action: 'unknown',
+        confidence: 0,
+        reason: 'Please give one instruction at a time.',
+      });
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
       expect(res.json().reason).toBe('Please give one instruction at a time.');
     });
   });
@@ -222,7 +259,11 @@ describe('POST /api/ai/rearrange', () => {
       // Grid has 1 page — page 3 is out of bounds (max allowed is 2 = pages+1)
       mockClassify({ action: 'move_to_page', targetPage: 3, filter: 'music' });
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -236,11 +277,21 @@ describe('POST /api/ai/rearrange', () => {
       // Grid has 1 page — page 2 is valid (new page)
       mockClassify({ action: 'move_to_page', targetPage: 2, filter: 'music' });
       vi.mocked(executeMoveToPage).mockResolvedValue({
-        success: true, confidence: 0.98, reason: '', mutations: { appIds: [2], targetPage: 2 },
-        inputTokens: 50, outputTokens: 10, costUsd: 0.00001, ...DET_FIELDS,
+        success: true,
+        confidence: 0.98,
+        reason: '',
+        mutations: { appIds: [2], targetPage: 2 },
+        inputTokens: 50,
+        outputTokens: 10,
+        costUsd: 0.00001,
+        ...DET_FIELDS,
       });
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
 
       expect(res.statusCode).toBe(200);
       expect(res.json().success).toBe(true);
@@ -272,8 +323,14 @@ describe('POST /api/ai/rearrange', () => {
     it('routes move_to_page to executeMoveToPage', async () => {
       mockClassify({ action: 'move_to_page', targetPage: 2 });
       vi.mocked(executeMoveToPage).mockResolvedValue({
-        success: true, confidence: 0.95, reason: '', mutations: { appIds: [1], targetPage: 2 },
-        inputTokens: 50, outputTokens: 10, costUsd: 0.00001, ...DET_FIELDS,
+        success: true,
+        confidence: 0.95,
+        reason: '',
+        mutations: { appIds: [1], targetPage: 2 },
+        inputTokens: 50,
+        outputTokens: 10,
+        costUsd: 0.00001,
+        ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -283,8 +340,14 @@ describe('POST /api/ai/rearrange', () => {
     it('routes sort_page to executeSortPage', async () => {
       mockClassify({ action: 'sort_page', targetPage: 1, sortOrder: 'alphabetical' });
       vi.mocked(executeSortPage).mockResolvedValue({
-        success: true, confidence: 1.0, reason: '', mutations: { page: 1, order: 'alphabetical' },
-        inputTokens: 0, outputTokens: 0, costUsd: 0, ...DET_FIELDS,
+        success: true,
+        confidence: 1.0,
+        reason: '',
+        mutations: { page: 1, order: 'alphabetical' },
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -294,8 +357,14 @@ describe('POST /api/ai/rearrange', () => {
     it('routes rename_page to executeRenamePage', async () => {
       mockClassify({ action: 'rename_page', targetPage: 1, newName: 'Work' });
       vi.mocked(executeRenamePage).mockReturnValue({
-        success: true, confidence: 1.0, reason: '', mutations: { page: 1, newName: 'Work' },
-        inputTokens: 0, outputTokens: 0, costUsd: 0, ...DET_FIELDS,
+        success: true,
+        confidence: 1.0,
+        reason: '',
+        mutations: { page: 1, newName: 'Work' },
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -305,8 +374,14 @@ describe('POST /api/ai/rearrange', () => {
     it('routes rename_group to executeRenameGroup', async () => {
       mockClassify({ action: 'rename_group', groupName: 'Browsers', newName: 'Web' });
       vi.mocked(executeRenameGroup).mockReturnValue({
-        success: true, confidence: 1.0, reason: '', mutations: { currentName: 'Browsers', newName: 'Web' },
-        inputTokens: 0, outputTokens: 0, costUsd: 0, ...DET_FIELDS,
+        success: true,
+        confidence: 1.0,
+        reason: '',
+        mutations: { currentName: 'Browsers', newName: 'Web' },
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -316,8 +391,14 @@ describe('POST /api/ai/rearrange', () => {
     it('routes ungroup to executeUngroup', async () => {
       mockClassify({ action: 'ungroup', groupName: 'Browsers' });
       vi.mocked(executeUngroup).mockReturnValue({
-        success: true, confidence: 1.0, reason: '', mutations: { groupName: 'Browsers' },
-        inputTokens: 0, outputTokens: 0, costUsd: 0, ...DET_FIELDS,
+        success: true,
+        confidence: 1.0,
+        reason: '',
+        mutations: { groupName: 'Browsers' },
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: 0,
+        ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -327,8 +408,14 @@ describe('POST /api/ai/rearrange', () => {
     it('routes remove to executeRemove', async () => {
       mockClassify({ action: 'remove', filter: 'uninstallers' });
       vi.mocked(executeRemove).mockResolvedValue({
-        success: true, confidence: 0.95, reason: '', mutations: { appIds: [3] },
-        inputTokens: 50, outputTokens: 10, costUsd: 0.00001, ...DET_FIELDS,
+        success: true,
+        confidence: 0.95,
+        reason: '',
+        mutations: { appIds: [3] },
+        inputTokens: 50,
+        outputTokens: 10,
+        costUsd: 0.00001,
+        ...DET_FIELDS,
       });
 
       await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
@@ -381,6 +468,77 @@ describe('POST /api/ai/rearrange', () => {
     });
 
     // ISSUE-02: machineId / licenseKey required
+    it('rejects a grid with more than 1000 total apps with 400', async () => {
+      const bigPage = {
+        page: 1,
+        title: 'Big',
+        apps: Array.from({ length: 1001 }, (_, i) => ({
+          id: i + 1,
+          name: `App ${i + 1}`,
+          bundle: `com.app.${i + 1}`,
+        })),
+        groups: [],
+      };
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: { ...BASE_REQUEST, grid: { pages: [bigPage] } },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/too large/i);
+    });
+
+    it('accepts a grid with exactly 1000 total apps', async () => {
+      mockClassify();
+      mockExecuteGroup();
+      const bigPage = {
+        page: 1,
+        title: 'Big',
+        apps: Array.from({ length: 1000 }, (_, i) => ({
+          id: i + 1,
+          name: `App ${i + 1}`,
+          bundle: `com.app.${i + 1}`,
+        })),
+        groups: [],
+      };
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: { ...BASE_REQUEST, grid: { pages: [bigPage] } },
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('counts apps inside groups toward the total', async () => {
+      const pageWithGroups = {
+        page: 1,
+        title: 'Big',
+        apps: Array.from({ length: 500 }, (_, i) => ({
+          id: i + 1,
+          name: `App ${i + 1}`,
+          bundle: `com.app.${i + 1}`,
+        })),
+        groups: [
+          {
+            id: 1,
+            name: 'Group',
+            apps: Array.from({ length: 501 }, (_, i) => ({
+              id: 1000 + i + 1,
+              name: `GApp ${i + 1}`,
+              bundle: `com.gapp.${i + 1}`,
+            })),
+          },
+        ],
+      };
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: { ...BASE_REQUEST, grid: { pages: [pageWithGroups] } },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/too large/i);
+    });
+
     it('returns 401 when machineId is missing', async () => {
       const { machineId: _, ...withoutMachineId } = BASE_REQUEST;
       const res = await app.inject({
@@ -410,7 +568,11 @@ describe('POST /api/ai/rearrange', () => {
     it('rejects targetPage = 0', async () => {
       mockClassify({ action: 'move_to_page', targetPage: 0, sourcePage: null });
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
@@ -422,7 +584,11 @@ describe('POST /api/ai/rearrange', () => {
     it('rejects negative targetPage', async () => {
       mockClassify({ action: 'move_to_page', targetPage: -1, sourcePage: null });
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
 
       expect(res.json().success).toBe(false);
       expect(res.json().reason).toMatch(/out of range/i);
@@ -431,7 +597,11 @@ describe('POST /api/ai/rearrange', () => {
     it('rejects sourcePage = 0', async () => {
       mockClassify({ action: 'move_to_page', targetPage: 1, sourcePage: 0 });
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
 
       expect(res.json().success).toBe(false);
       expect(res.json().reason).toMatch(/out of range/i);
@@ -441,7 +611,11 @@ describe('POST /api/ai/rearrange', () => {
       // MINIMAL_GRID has 1 page; sourcePage 5 is invalid
       mockClassify({ action: 'move_to_page', targetPage: 1, sourcePage: 5 });
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
 
       expect(res.json().success).toBe(false);
       expect(res.json().reason).toMatch(/out of range/i);
@@ -456,7 +630,11 @@ describe('POST /api/ai/rearrange', () => {
     it('returns 502 when classifier throws', async () => {
       vi.mocked(classify).mockRejectedValue(new Error('OpenAI timeout'));
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
       expect(res.statusCode).toBe(502);
     });
   });
@@ -470,7 +648,11 @@ describe('POST /api/ai/rearrange', () => {
       mockClassify({ action: 'create_group' });
       vi.mocked(executeGroup).mockRejectedValue(new Error('OpenAI rate limit'));
 
-      const res = await app.inject({ method: 'POST', url: '/api/ai/rearrange', payload: BASE_REQUEST });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
       expect(res.statusCode).toBe(502);
     });
   });
@@ -546,7 +728,11 @@ describe('POST /api/ai/rearrange', () => {
       const res = await app.inject({
         method: 'PATCH',
         url: `/api/ai/rearrange/${FAKE_ID}/outcome`,
-        payload: { machineId: 'test-machine', outcome: 'failed_to_apply', reason: 'Page 1 is full' },
+        payload: {
+          machineId: 'test-machine',
+          outcome: 'failed_to_apply',
+          reason: 'Page 1 is full',
+        },
       });
 
       expect(res.statusCode).toBe(200);

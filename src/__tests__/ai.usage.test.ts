@@ -23,13 +23,18 @@ describe('checkAndIncrementUsage', () => {
   });
 
   // -------------------------------------------------------------------------
-  // No activation found — allow through (license validation is separate)
+  // No activation found — block (fabricated machineId bypass prevention)
   // -------------------------------------------------------------------------
 
-  it('allows request when no device activation found', async () => {
+  it('blocks request when no device activation found', async () => {
     prismaMock.deviceActivation.findFirst.mockResolvedValue(null as any);
     const result = await checkAndIncrementUsage('key-123', 'machine-abc');
-    expect(result.allowed).toBe(true);
+    expect(result.allowed).toBe(false);
+    if (!result.allowed) {
+      expect(result.limitType).toBe('lifetime');
+      expect(result.reason).toMatch(/not recognised|activate/i);
+    }
+    expect(prismaMock.deviceActivation.update).not.toHaveBeenCalled();
   });
 
   // -------------------------------------------------------------------------

@@ -12,11 +12,7 @@ import {
   executeUngroup,
   executeRemove,
 } from '../services/ai/executor';
-import {
-  RearrangeRequestSchema,
-  OutcomeRequestSchema,
-  VALID_OUTCOMES,
-} from '../schemas/ai.schema';
+import { RearrangeRequestSchema, OutcomeRequestSchema, VALID_OUTCOMES } from '../schemas/ai.schema';
 
 const aiRoutes: FastifyPluginAsync = async (fastify) => {
   // ---------------------------------------------------------------------------
@@ -28,11 +24,19 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       schema: {
         body: RearrangeRequestSchema,
         tags: ['ai'],
-        description: 'Classify a natural-language grid instruction and return a mutation payload for Swift to apply',
+        description:
+          'Classify a natural-language grid instruction and return a mutation payload for Swift to apply',
       },
     },
     async (request, reply) => {
-      const { instruction, grid, currentPage, maxItemsPerPage = 35, machineId, licenseKey } = request.body as any;
+      const {
+        instruction,
+        grid,
+        currentPage,
+        maxItemsPerPage = 35,
+        machineId,
+        licenseKey,
+      } = request.body as any;
       const startTime = Date.now();
 
       // Helper: persist a row and return the id
@@ -94,7 +98,24 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // ---------------------------------------------------------------------------
-      // 0b. Usage check
+      // 0b. Grid size guard — reject oversized grids before hitting the LLM
+      // ---------------------------------------------------------------------------
+      const MAX_GRID_APPS = 1000;
+      const totalApps = grid.pages.reduce(
+        (sum: number, p: any) =>
+          sum +
+          (p.apps?.length ?? 0) +
+          (p.groups ?? []).reduce((gs: number, g: any) => gs + (g.apps?.length ?? 0), 0),
+        0
+      );
+      if (totalApps > MAX_GRID_APPS) {
+        return reply.status(400).send({
+          error: `Grid too large: ${totalApps} apps exceeds the maximum of ${MAX_GRID_APPS}`,
+        });
+      }
+
+      // ---------------------------------------------------------------------------
+      // 0c. Usage check
       // ---------------------------------------------------------------------------
       request.log.info({ machineId, licenseKey }, 'ai usage check');
       const usage = await checkAndIncrementUsage(licenseKey, machineId);
@@ -139,7 +160,16 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       request.log.info(
-        { action: classified.action, confidence: classified.confidence, filter: classified.filter, filterType: classified.filterType, targetPage: classified.targetPage, sourcePage: classified.sourcePage, groupName: classified.groupName, instruction },
+        {
+          action: classified.action,
+          confidence: classified.confidence,
+          filter: classified.filter,
+          filterType: classified.filterType,
+          targetPage: classified.targetPage,
+          sourcePage: classified.sourcePage,
+          groupName: classified.groupName,
+          instruction,
+        },
         'ai classify'
       );
 
@@ -177,7 +207,8 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       // 3. Validate classifier output
       // ---------------------------------------------------------------------------
       const pageCount = grid.pages.length;
-      const maxPageNum = grid.pages.length > 0 ? Math.max(...grid.pages.map((p: { page: number }) => p.page)) : 0;
+      const maxPageNum =
+        grid.pages.length > 0 ? Math.max(...grid.pages.map((p: { page: number }) => p.page)) : 0;
 
       const targetPageInvalid =
         classified.targetPage !== null &&
@@ -227,7 +258,14 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         switch (classified.action) {
           case 'move_to_page':
-            result = await executeMoveToPage(classified, grid, openai, executorModel, maxItemsPerPage, currentPage);
+            result = await executeMoveToPage(
+              classified,
+              grid,
+              openai,
+              executorModel,
+              maxItemsPerPage,
+              currentPage
+            );
             break;
 
           case 'create_group':
@@ -322,7 +360,8 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       schema: {
         body: OutcomeRequestSchema,
         tags: ['ai'],
-        description: 'Report the user outcome (accepted / undone / failed_to_apply) for an AI request',
+        description:
+          'Report the user outcome (accepted / undone / failed_to_apply) for an AI request',
       },
     },
     async (request, reply) => {
@@ -330,7 +369,9 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       const { machineId, outcome, reason } = request.body as any;
 
       if (!VALID_OUTCOMES.includes(outcome)) {
-        return reply.status(400).send({ error: `Invalid outcome. Must be one of: ${VALID_OUTCOMES.join(', ')}` });
+        return reply
+          .status(400)
+          .send({ error: `Invalid outcome. Must be one of: ${VALID_OUTCOMES.join(', ')}` });
       }
 
       let record;

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type OpenAI from 'openai';
-import { executeGroup, executeMoveToPage, executeSortPage, executeRenamePage, executeRenameGroup, executeUngroup } from '../services/ai/executor';
+import {
+  executeGroup,
+  executeMoveToPage,
+  executeSortPage,
+  executeRenamePage,
+  executeRenameGroup,
+  executeUngroup,
+} from '../services/ai/executor';
 import type { ClassifiedAction } from '../services/ai/classifier';
 import type { Grid } from '../schemas/ai.schema';
 
@@ -62,44 +69,65 @@ const SIMPLE_GRID: Grid = {
 
 describe('executeGroup — group name', () => {
   it('uses group name returned by the LLM when classifier sends null', async () => {
-    const client = makeClient(JSON.stringify({
-      name: 'Games',
-      apps: [50, 96, 133],
-      success: true,
-      confidence: 0.98,
-      reason: '',
-    }));
+    const client = makeClient(
+      JSON.stringify({
+        name: 'Games',
+        apps: [50, 96, 133],
+        success: true,
+        confidence: 0.98,
+        reason: '',
+      })
+    );
 
-    const result = await executeGroup(baseCA({ groupName: null }), SIMPLE_GRID, client, 'gpt-4.1-mini');
+    const result = await executeGroup(
+      baseCA({ groupName: null }),
+      SIMPLE_GRID,
+      client,
+      'gpt-4.1-mini'
+    );
 
     expect(result.success).toBe(true);
     expect((result.mutations as any).groupName).toBe('Games');
   });
 
   it('uses the classifier-supplied group name when provided', async () => {
-    const client = makeClient(JSON.stringify({
-      name: 'Gaming',
-      apps: [50, 96, 133],
-      success: true,
-      confidence: 0.98,
-      reason: '',
-    }));
+    const client = makeClient(
+      JSON.stringify({
+        name: 'Gaming',
+        apps: [50, 96, 133],
+        success: true,
+        confidence: 0.98,
+        reason: '',
+      })
+    );
 
-    const result = await executeGroup(baseCA({ groupName: 'Gaming' }), SIMPLE_GRID, client, 'gpt-4.1-mini');
+    const result = await executeGroup(
+      baseCA({ groupName: 'Gaming' }),
+      SIMPLE_GRID,
+      client,
+      'gpt-4.1-mini'
+    );
 
     expect((result.mutations as any).groupName).toBe('Gaming');
   });
 
   it('falls back to "New Group" only when both classifier and LLM return no name', async () => {
-    const client = makeClient(JSON.stringify({
-      name: '',
-      apps: [50, 96, 133],
-      success: true,
-      confidence: 0.95,
-      reason: '',
-    }));
+    const client = makeClient(
+      JSON.stringify({
+        name: '',
+        apps: [50, 96, 133],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
 
-    const result = await executeGroup(baseCA({ groupName: null }), SIMPLE_GRID, client, 'gpt-4.1-mini');
+    const result = await executeGroup(
+      baseCA({ groupName: null }),
+      SIMPLE_GRID,
+      client,
+      'gpt-4.1-mini'
+    );
 
     expect((result.mutations as any).groupName).toBe('New Group');
   });
@@ -111,12 +139,24 @@ describe('executeGroup — group name', () => {
 
 describe('executeGroup — no group name collision', () => {
   it('two sequential create_group calls produce distinct group names', async () => {
-    const gamesClient = makeClient(JSON.stringify({
-      name: 'Games', apps: [50, 96, 133], success: true, confidence: 0.98, reason: '',
-    }));
-    const editorsClient = makeClient(JSON.stringify({
-      name: 'Text Editors', apps: [142, 181], success: true, confidence: 0.95, reason: '',
-    }));
+    const gamesClient = makeClient(
+      JSON.stringify({
+        name: 'Games',
+        apps: [50, 96, 133],
+        success: true,
+        confidence: 0.98,
+        reason: '',
+      })
+    );
+    const editorsClient = makeClient(
+      JSON.stringify({
+        name: 'Text Editors',
+        apps: [142, 181],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
 
     const gamesResult = await executeGroup(
       baseCA({ filter: 'games', groupName: null }),
@@ -169,9 +209,15 @@ describe('executeGroup — source_page candidate pool', () => {
   };
 
   it('restricts candidate pool to source_page when set', async () => {
-    const client = makeClient(JSON.stringify({
-      name: 'Games', apps: [50, 96], success: true, confidence: 0.98, reason: '',
-    }));
+    const client = makeClient(
+      JSON.stringify({
+        name: 'Games',
+        apps: [50, 96],
+        success: true,
+        confidence: 0.98,
+        reason: '',
+      })
+    );
 
     await executeGroup(
       baseCA({ filter: 'games', sourcePage: 1 }),
@@ -191,9 +237,15 @@ describe('executeGroup — source_page candidate pool', () => {
   });
 
   it('searches all pages when source_page is null', async () => {
-    const client = makeClient(JSON.stringify({
-      name: 'Games', apps: [50, 96], success: true, confidence: 0.98, reason: '',
-    }));
+    const client = makeClient(
+      JSON.stringify({
+        name: 'Games',
+        apps: [50, 96],
+        success: true,
+        confidence: 0.98,
+        reason: '',
+      })
+    );
 
     await executeGroup(
       baseCA({ filter: 'games', sourcePage: null }),
@@ -228,7 +280,12 @@ describe('executeGroup — JSON with comments', () => {
   "reason": ""
 }`;
     const client = makeClient(responseWithComments);
-    const result = await executeGroup(baseCA({ filter: 'communication apps', groupName: 'Communication Apps' }), SIMPLE_GRID, client, 'gpt-4.1');
+    const result = await executeGroup(
+      baseCA({ filter: 'communication apps', groupName: 'Communication Apps' }),
+      SIMPLE_GRID,
+      client,
+      'gpt-4.1'
+    );
 
     // IDs 305-307 are not in SIMPLE_GRID so they'll be filtered, but parsing must not throw
     expect(result.success).toBe(false); // no valid IDs
@@ -242,9 +299,15 @@ describe('executeGroup — JSON with comments', () => {
 
 describe('executeGroup — no matches', () => {
   it('returns success=false when LLM finds no matching apps', async () => {
-    const client = makeClient(JSON.stringify({
-      name: 'Games', apps: [], success: false, confidence: 0.5, reason: 'No games found',
-    }));
+    const client = makeClient(
+      JSON.stringify({
+        name: 'Games',
+        apps: [],
+        success: false,
+        confidence: 0.5,
+        reason: 'No games found',
+      })
+    );
 
     const result = await executeGroup(baseCA(), SIMPLE_GRID, client, 'gpt-4.1-mini');
 
@@ -253,9 +316,15 @@ describe('executeGroup — no matches', () => {
   });
 
   it('filters out hallucinated IDs not present in the grid', async () => {
-    const client = makeClient(JSON.stringify({
-      name: 'Games', apps: [50, 9999], success: true, confidence: 0.95, reason: '',
-    }));
+    const client = makeClient(
+      JSON.stringify({
+        name: 'Games',
+        apps: [50, 9999],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
 
     const result = await executeGroup(baseCA(), SIMPLE_GRID, client, 'gpt-4.1-mini');
 
@@ -290,14 +359,24 @@ describe('executeMoveToPage', () => {
   };
 
   it('returns correct appIds and targetPage from LLM moves', async () => {
-    const client = makeClient(JSON.stringify({
-      moves: [{ id: 101, name: 'Spotify', to_page: 1 }, { id: 102, name: 'Music', to_page: 1 }],
-      success: true,
-      confidence: 0.98,
-      reason: '',
-    }));
+    const client = makeClient(
+      JSON.stringify({
+        moves: [
+          { id: 101, name: 'Spotify', to_page: 1 },
+          { id: 102, name: 'Music', to_page: 1 },
+        ],
+        success: true,
+        confidence: 0.98,
+        reason: '',
+      })
+    );
 
-    const ca = baseCA({ action: 'move_to_page', filter: 'music apps', targetPage: 1, groupName: null });
+    const ca = baseCA({
+      action: 'move_to_page',
+      filter: 'music apps',
+      targetPage: 1,
+      groupName: null,
+    });
     const result = await executeMoveToPage(ca, GRID, client, 'gpt-4.1-mini', 35);
 
     expect(result.success).toBe(true);
@@ -306,14 +385,24 @@ describe('executeMoveToPage', () => {
   });
 
   it('filters out hallucinated IDs not present in the grid', async () => {
-    const client = makeClient(JSON.stringify({
-      moves: [{ id: 101, name: 'Spotify', to_page: 1 }, { id: 9999, name: 'Ghost', to_page: 1 }],
-      success: true,
-      confidence: 0.95,
-      reason: '',
-    }));
+    const client = makeClient(
+      JSON.stringify({
+        moves: [
+          { id: 101, name: 'Spotify', to_page: 1 },
+          { id: 9999, name: 'Ghost', to_page: 1 },
+        ],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
 
-    const ca = baseCA({ action: 'move_to_page', filter: 'music apps', targetPage: 1, groupName: null });
+    const ca = baseCA({
+      action: 'move_to_page',
+      filter: 'music apps',
+      targetPage: 1,
+      groupName: null,
+    });
     const result = await executeMoveToPage(ca, GRID, client, 'gpt-4.1-mini', 35);
 
     expect((result.mutations as any).appIds).toEqual([101]);
@@ -321,7 +410,14 @@ describe('executeMoveToPage', () => {
 
   it('is deterministic when source_page is set with no filter (no LLM call)', async () => {
     const client = makeClient('should not be called');
-    const ca = baseCA({ action: 'move_to_page', sourcePage: 1, targetPage: 2, filter: null, filterType: null, groupName: null });
+    const ca = baseCA({
+      action: 'move_to_page',
+      sourcePage: 1,
+      targetPage: 2,
+      filter: null,
+      filterType: null,
+      groupName: null,
+    });
     const result = await executeMoveToPage(ca, GRID, client, 'gpt-4.1-mini', 35);
 
     expect(client.chat.completions.create).not.toHaveBeenCalled();
@@ -332,27 +428,53 @@ describe('executeMoveToPage', () => {
 
   it('deterministic path includes apps inside groups on the source page', async () => {
     const gridWithGroup: Grid = {
-      pages: [{
-        page: 1,
-        apps: [{ id: 1, name: 'Chrome', bundle: 'com.google.Chrome' }],
-        groups: [{ id: 200, name: 'Comms', apps: [{ id: 50, name: 'Slack', bundle: 'com.tinyspeck.slackmacgap' }] }],
-      }],
+      pages: [
+        {
+          page: 1,
+          apps: [{ id: 1, name: 'Chrome', bundle: 'com.google.Chrome' }],
+          groups: [
+            {
+              id: 200,
+              name: 'Comms',
+              apps: [{ id: 50, name: 'Slack', bundle: 'com.tinyspeck.slackmacgap' }],
+            },
+          ],
+        },
+      ],
     };
     const client = makeClient('should not be called');
-    const ca = baseCA({ action: 'move_to_page', sourcePage: 1, targetPage: 2, filter: null, filterType: null, groupName: null });
+    const ca = baseCA({
+      action: 'move_to_page',
+      sourcePage: 1,
+      targetPage: 2,
+      filter: null,
+      filterType: null,
+      groupName: null,
+    });
     const result = await executeMoveToPage(ca, gridWithGroup, client, 'gpt-4.1-mini', 35);
 
     expect(client.chat.completions.create).not.toHaveBeenCalled();
-    expect((result.mutations as any).appIds).toContain(1);   // loose app
-    expect((result.mutations as any).appIds).toContain(50);  // app inside group
+    expect((result.mutations as any).appIds).toContain(1); // loose app
+    expect((result.mutations as any).appIds).toContain(50); // app inside group
   });
 
   it('falls through to LLM when source_page is set but filter is also present', async () => {
-    const client = makeClient(JSON.stringify({
-      moves: [{ id: 1, name: 'Chrome', to_page: 2 }],
-      success: true, confidence: 0.95, reason: '',
-    }));
-    const ca = baseCA({ action: 'move_to_page', sourcePage: 1, targetPage: 2, filter: 'browsers', filterType: 'semantic', groupName: null });
+    const client = makeClient(
+      JSON.stringify({
+        moves: [{ id: 1, name: 'Chrome', to_page: 2 }],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
+    const ca = baseCA({
+      action: 'move_to_page',
+      sourcePage: 1,
+      targetPage: 2,
+      filter: 'browsers',
+      filterType: 'semantic',
+      groupName: null,
+    });
     const result = await executeMoveToPage(ca, GRID, client, 'gpt-4.1-mini', 35);
 
     expect(client.chat.completions.create).toHaveBeenCalled();
@@ -361,7 +483,14 @@ describe('executeMoveToPage', () => {
 
   it('returns success=false when source_page does not exist', async () => {
     const client = makeClient('should not be called');
-    const ca = baseCA({ action: 'move_to_page', sourcePage: 99, targetPage: 2, filter: null, filterType: null, groupName: null });
+    const ca = baseCA({
+      action: 'move_to_page',
+      sourcePage: 99,
+      targetPage: 2,
+      filter: null,
+      filterType: null,
+      groupName: null,
+    });
     const result = await executeMoveToPage(ca, GRID, client, 'gpt-4.1-mini', 35);
 
     expect(result.success).toBe(false);
@@ -379,7 +508,13 @@ describe('executeRenamePage', () => {
   };
 
   it('returns correct mutation for valid rename', () => {
-    const ca = baseCA({ action: 'rename_page', targetPage: 1, newName: 'Work', filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_page',
+      targetPage: 1,
+      newName: 'Work',
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenamePage(ca, grid);
     expect(result.success).toBe(true);
     expect((result.mutations as any).newName).toBe('Work');
@@ -387,13 +522,25 @@ describe('executeRenamePage', () => {
   });
 
   it('returns success=false when page not found', () => {
-    const ca = baseCA({ action: 'rename_page', targetPage: 99, newName: 'Work', filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_page',
+      targetPage: 99,
+      newName: 'Work',
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenamePage(ca, grid);
     expect(result.success).toBe(false);
   });
 
   it('returns success=false when new name is missing', () => {
-    const ca = baseCA({ action: 'rename_page', targetPage: 1, newName: null, filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_page',
+      targetPage: 1,
+      newName: null,
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenamePage(ca, grid);
     expect(result.success).toBe(false);
   });
@@ -401,16 +548,22 @@ describe('executeRenamePage', () => {
 
 describe('executeUngroup', () => {
   const grid: Grid = {
-    pages: [{
-      page: 1,
-      apps: [],
-      groups: [
-        { id: 200, name: 'Browsers', apps: [
-          { id: 1, name: 'Chrome', bundle: 'com.google.Chrome' },
-          { id: 2, name: 'Firefox', bundle: 'org.mozilla.firefox' },
-        ]},
-      ],
-    }],
+    pages: [
+      {
+        page: 1,
+        apps: [],
+        groups: [
+          {
+            id: 200,
+            name: 'Browsers',
+            apps: [
+              { id: 1, name: 'Chrome', bundle: 'com.google.Chrome' },
+              { id: 2, name: 'Firefox', bundle: 'org.mozilla.firefox' },
+            ],
+          },
+        ],
+      },
+    ],
   };
 
   it('returns correct groupName mutation for an existing group', () => {
@@ -444,15 +597,23 @@ describe('executeUngroup', () => {
 
 describe('executeRenameGroup', () => {
   const grid: Grid = {
-    pages: [{
-      page: 1,
-      apps: [],
-      groups: [{ id: 200, name: 'Browsers', apps: [] }],
-    }],
+    pages: [
+      {
+        page: 1,
+        apps: [],
+        groups: [{ id: 200, name: 'Browsers', apps: [] }],
+      },
+    ],
   };
 
   it('returns correct mutation for valid group rename', () => {
-    const ca = baseCA({ action: 'rename_group', groupName: 'Browsers', newName: 'Web Browsers', filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_group',
+      groupName: 'Browsers',
+      newName: 'Web Browsers',
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenameGroup(ca, grid);
     expect(result.success).toBe(true);
     expect((result.mutations as any).currentName).toBe('Browsers');
@@ -460,7 +621,13 @@ describe('executeRenameGroup', () => {
   });
 
   it('returns success=false when group does not exist', () => {
-    const ca = baseCA({ action: 'rename_group', groupName: 'Games', newName: 'Gaming', filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_group',
+      groupName: 'Games',
+      newName: 'Gaming',
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenameGroup(ca, grid);
     expect(result.success).toBe(false);
     expect(result.reason).toMatch(/not found/i);
@@ -480,7 +647,14 @@ describe('executeMoveToPage — null targetPage guard (ISSUE-03)', () => {
 
   it('returns success=false on deterministic path when targetPage is null', async () => {
     const client = makeClient('should not be called');
-    const ca = baseCA({ action: 'move_to_page', sourcePage: 1, targetPage: null, filter: null, filterType: null, groupName: null });
+    const ca = baseCA({
+      action: 'move_to_page',
+      sourcePage: 1,
+      targetPage: null,
+      filter: null,
+      filterType: null,
+      groupName: null,
+    });
     const result = await executeMoveToPage(ca, grid, client, 'gpt-4.1-mini', 35);
 
     expect(client.chat.completions.create).not.toHaveBeenCalled();
@@ -488,14 +662,25 @@ describe('executeMoveToPage — null targetPage guard (ISSUE-03)', () => {
     expect(result.mutations).toBeNull();
   });
 
-  it('returns success=false on LLM path when targetPage is null', async () => {
-    const client = makeClient(JSON.stringify({
-      moves: [{ id: 1, name: 'Chrome', to_page: 2 }],
-      success: true, confidence: 0.95, reason: '',
-    }));
-    const ca = baseCA({ action: 'move_to_page', targetPage: null, filter: 'browsers', filterType: 'semantic', groupName: null });
+  it('returns success=false on LLM path when targetPage is null — without calling the LLM', async () => {
+    const client = makeClient(
+      JSON.stringify({
+        moves: [{ id: 1, name: 'Chrome', to_page: 2 }],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
+    const ca = baseCA({
+      action: 'move_to_page',
+      targetPage: null,
+      filter: 'browsers',
+      filterType: 'semantic',
+      groupName: null,
+    });
     const result = await executeMoveToPage(ca, grid, client, 'gpt-4.1-mini', 35);
 
+    expect(client.chat.completions.create).not.toHaveBeenCalled();
     expect(result.success).toBe(false);
     expect(result.mutations).toBeNull();
   });
@@ -503,7 +688,9 @@ describe('executeMoveToPage — null targetPage guard (ISSUE-03)', () => {
 
 describe('executeSortPage — null targetPage guard (ISSUE-03)', () => {
   const grid: Grid = {
-    pages: [{ page: 1, apps: [{ id: 1, name: 'Chrome', bundle: 'com.google.Chrome' }], groups: [] }],
+    pages: [
+      { page: 1, apps: [{ id: 1, name: 'Chrome', bundle: 'com.google.Chrome' }], groups: [] },
+    ],
   };
 
   it('returns success=false when targetPage is null', async () => {
@@ -522,23 +709,37 @@ describe('executeSortPage — null targetPage guard (ISSUE-03)', () => {
 
 describe('executeSortPage — category sort permutation (ISSUE-06)', () => {
   const grid: Grid = {
-    pages: [{
-      page: 1,
-      apps: [
-        { id: 1, name: 'Chrome', bundle: 'com.google.Chrome' },
-        { id: 2, name: 'Spotify', bundle: 'com.spotify.client' },
-        { id: 3, name: 'Xcode', bundle: 'com.apple.dt.Xcode' },
-      ],
-      groups: [],
-    }],
+    pages: [
+      {
+        page: 1,
+        apps: [
+          { id: 1, name: 'Chrome', bundle: 'com.google.Chrome' },
+          { id: 2, name: 'Spotify', bundle: 'com.spotify.client' },
+          { id: 3, name: 'Xcode', bundle: 'com.apple.dt.Xcode' },
+        ],
+        groups: [],
+      },
+    ],
   };
 
   it('drops phantom IDs and appends missing IDs to ensure full permutation', async () => {
     // LLM returns id 9999 (phantom) and omits id 3
-    const client = makeClient(JSON.stringify({
-      page: 1, order: [2, 9999, 1], success: true, confidence: 0.95, reason: '',
-    }));
-    const ca = baseCA({ action: 'sort_page', targetPage: 1, sortOrder: 'category', filter: null, filterType: null });
+    const client = makeClient(
+      JSON.stringify({
+        page: 1,
+        order: [2, 9999, 1],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
+    const ca = baseCA({
+      action: 'sort_page',
+      targetPage: 1,
+      sortOrder: 'category',
+      filter: null,
+      filterType: null,
+    });
     const result = await executeSortPage(ca, grid, client, 'gpt-4.1-mini');
 
     const { orderedAppIds } = result.mutations as any;
@@ -549,10 +750,22 @@ describe('executeSortPage — category sort permutation (ISSUE-06)', () => {
 
   it('deduplicates IDs returned by the LLM', async () => {
     // LLM returns id 1 twice
-    const client = makeClient(JSON.stringify({
-      page: 1, order: [1, 1, 2, 3], success: true, confidence: 0.95, reason: '',
-    }));
-    const ca = baseCA({ action: 'sort_page', targetPage: 1, sortOrder: 'category', filter: null, filterType: null });
+    const client = makeClient(
+      JSON.stringify({
+        page: 1,
+        order: [1, 1, 2, 3],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
+    const ca = baseCA({
+      action: 'sort_page',
+      targetPage: 1,
+      sortOrder: 'category',
+      filter: null,
+      filterType: null,
+    });
     const result = await executeSortPage(ca, grid, client, 'gpt-4.1-mini');
 
     const { orderedAppIds } = result.mutations as any;
@@ -566,29 +779,62 @@ describe('executeSortPage — category sort permutation (ISSUE-06)', () => {
 
 describe('executeGroup — group name sanitization (ISSUE-07)', () => {
   it('trims whitespace from LLM-returned group name', async () => {
-    const client = makeClient(JSON.stringify({
-      name: '  Dev Tools  ', apps: [50], success: true, confidence: 0.95, reason: '',
-    }));
-    const result = await executeGroup(baseCA({ filter: 'dev tools' }), SIMPLE_GRID, client, 'gpt-4.1-mini');
+    const client = makeClient(
+      JSON.stringify({
+        name: '  Dev Tools  ',
+        apps: [50],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
+    const result = await executeGroup(
+      baseCA({ filter: 'dev tools' }),
+      SIMPLE_GRID,
+      client,
+      'gpt-4.1-mini'
+    );
 
     expect((result.mutations as any).groupName).toBe('Dev Tools');
   });
 
   it('caps group name at 64 characters', async () => {
     const longName = 'A'.repeat(100);
-    const client = makeClient(JSON.stringify({
-      name: longName, apps: [50], success: true, confidence: 0.95, reason: '',
-    }));
-    const result = await executeGroup(baseCA({ filter: 'games' }), SIMPLE_GRID, client, 'gpt-4.1-mini');
+    const client = makeClient(
+      JSON.stringify({
+        name: longName,
+        apps: [50],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
+    const result = await executeGroup(
+      baseCA({ filter: 'games' }),
+      SIMPLE_GRID,
+      client,
+      'gpt-4.1-mini'
+    );
 
     expect((result.mutations as any).groupName).toHaveLength(64);
   });
 
   it('falls back to "New Group" when LLM returns whitespace-only name', async () => {
-    const client = makeClient(JSON.stringify({
-      name: '   ', apps: [50], success: true, confidence: 0.95, reason: '',
-    }));
-    const result = await executeGroup(baseCA({ filter: 'games', groupName: null }), SIMPLE_GRID, client, 'gpt-4.1-mini');
+    const client = makeClient(
+      JSON.stringify({
+        name: '   ',
+        apps: [50],
+        success: true,
+        confidence: 0.95,
+        reason: '',
+      })
+    );
+    const result = await executeGroup(
+      baseCA({ filter: 'games', groupName: null }),
+      SIMPLE_GRID,
+      client,
+      'gpt-4.1-mini'
+    );
 
     expect((result.mutations as any).groupName).toBe('New Group');
   });
@@ -602,7 +848,12 @@ describe('executeGroup — targetPage existence check (ISSUE-08)', () => {
   it('returns success=false when targetPage does not exist in grid', async () => {
     const client = makeClient('should not be called');
     // SIMPLE_GRID only has page 1; targetPage 99 doesn't exist
-    const ca = baseCA({ action: 'create_group', targetPage: 99, sourcePage: null, filter: 'games' });
+    const ca = baseCA({
+      action: 'create_group',
+      targetPage: 99,
+      sourcePage: null,
+      filter: 'games',
+    });
     const result = await executeGroup(ca, SIMPLE_GRID, client, 'gpt-4.1-mini');
 
     expect(client.chat.completions.create).not.toHaveBeenCalled();
@@ -622,7 +873,13 @@ describe('executeRenamePage — newName sanitization (ISSUE-09)', () => {
   };
 
   it('trims whitespace from newName', () => {
-    const ca = baseCA({ action: 'rename_page', targetPage: 1, newName: '  Work  ', filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_page',
+      targetPage: 1,
+      newName: '  Work  ',
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenamePage(ca, grid);
     expect(result.success).toBe(true);
     expect((result.mutations as any).newName).toBe('Work');
@@ -630,14 +887,26 @@ describe('executeRenamePage — newName sanitization (ISSUE-09)', () => {
 
   it('caps newName at 64 characters', () => {
     const longName = 'B'.repeat(100);
-    const ca = baseCA({ action: 'rename_page', targetPage: 1, newName: longName, filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_page',
+      targetPage: 1,
+      newName: longName,
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenamePage(ca, grid);
     expect(result.success).toBe(true);
     expect((result.mutations as any).newName).toHaveLength(64);
   });
 
   it('returns success=false when newName is whitespace-only after trim', () => {
-    const ca = baseCA({ action: 'rename_page', targetPage: 1, newName: '   ', filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_page',
+      targetPage: 1,
+      newName: '   ',
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenamePage(ca, grid);
     expect(result.success).toBe(false);
   });
@@ -649,7 +918,13 @@ describe('executeRenameGroup — newName sanitization (ISSUE-09)', () => {
   };
 
   it('trims whitespace from newName', () => {
-    const ca = baseCA({ action: 'rename_group', groupName: 'Browsers', newName: '  Web  ', filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_group',
+      groupName: 'Browsers',
+      newName: '  Web  ',
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenameGroup(ca, grid);
     expect(result.success).toBe(true);
     expect((result.mutations as any).newName).toBe('Web');
@@ -657,7 +932,13 @@ describe('executeRenameGroup — newName sanitization (ISSUE-09)', () => {
 
   it('caps newName at 64 characters', () => {
     const longName = 'C'.repeat(100);
-    const ca = baseCA({ action: 'rename_group', groupName: 'Browsers', newName: longName, filter: null, filterType: null });
+    const ca = baseCA({
+      action: 'rename_group',
+      groupName: 'Browsers',
+      newName: longName,
+      filter: null,
+      filterType: null,
+    });
     const result = executeRenameGroup(ca, grid);
     expect(result.success).toBe(true);
     expect((result.mutations as any).newName).toHaveLength(64);
