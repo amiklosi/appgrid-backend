@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-echo "Syncing database schema..."
-npx prisma db push --accept-data-loss
+echo "Running database migrations..."
+npx prisma migrate deploy
 
 echo "Starting application..."
 exec "$@"

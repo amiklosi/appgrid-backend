@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "ai_requests" (
-    "id" TEXT NOT NULL PRIMARY KEY,
+    "id" TEXT NOT NULL,
     "machine_id" TEXT,
     "license_key" TEXT,
     "instruction" TEXT NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE "ai_requests" (
     "current_page" INTEGER,
     "max_items_per_page" INTEGER,
     "action" TEXT NOT NULL,
-    "confidence" REAL NOT NULL DEFAULT 0,
+    "confidence" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "reason" TEXT,
     "success" BOOLEAN NOT NULL DEFAULT false,
     "mutations" TEXT,
@@ -19,12 +19,14 @@ CREATE TABLE "ai_requests" (
     "executor_response" TEXT,
     "input_tokens" INTEGER NOT NULL DEFAULT 0,
     "output_tokens" INTEGER NOT NULL DEFAULT 0,
-    "cost_usd" REAL NOT NULL DEFAULT 0,
+    "cost_usd" DOUBLE PRECISION NOT NULL DEFAULT 0,
     "outcome" TEXT NOT NULL DEFAULT 'pending',
-    "outcome_at" DATETIME,
+    "outcome_at" TIMESTAMP(3),
     "outcome_reason" TEXT,
-    "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "duration_ms" INTEGER
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "duration_ms" INTEGER,
+
+    CONSTRAINT "ai_requests_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
