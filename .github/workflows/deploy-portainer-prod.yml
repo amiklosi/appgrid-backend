@@ -28,7 +28,8 @@ jobs:
       - name: Run tests
         run: yarn test
         env:
-          DATABASE_URL: postgresql://test:test@localhost:5432/test
+          DATABASE_URL: file:./test.db
+          OPENAI_API_KEY: test-key
 
   build-and-deploy:
     runs-on: ubuntu-latest
