@@ -86,6 +86,8 @@ jobs:
           AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
           AXIOM_DATASET: ${{ secrets.AXIOM_DATASET }}
           POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TRIAL_DURATION_DAYS: ${{ secrets.TRIAL_DURATION_DAYS }}
         run: |
           # Get Portainer endpoint ID
           ENDPOINT_ID=$(curl -s -H "X-API-Key: ${PORTAINER_ACCESS_TOKEN}" \
@@ -112,6 +114,8 @@ jobs:
             --arg axiomToken "${AXIOM_TOKEN}" \
             --arg axiomDataset "${AXIOM_DATASET}" \
             --arg posthogKey "${POSTHOG_API_KEY}" \
+            --arg openaiKey "${OPENAI_API_KEY}" \
+            --arg trialDays "${TRIAL_DURATION_DAYS}" \
             '{
               name: $name,
               stackFileContent: $compose,
@@ -125,7 +129,9 @@ jobs:
                 {name: "PADDLE_WEBHOOK_SECRET", value: $paddleSecret},
                 {name: "AXIOM_TOKEN", value: $axiomToken},
                 {name: "AXIOM_DATASET", value: $axiomDataset},
-                {name: "POSTHOG_API_KEY", value: $posthogKey}
+                {name: "POSTHOG_API_KEY", value: $posthogKey},
+                {name: "OPENAI_API_KEY", value: $openaiKey},
+                {name: "TRIAL_DURATION_DAYS", value: $trialDays}
               ]
             }' > /tmp/stack-payload.json
 
