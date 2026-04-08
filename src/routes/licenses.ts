@@ -45,7 +45,8 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { licenseKey, deviceFingerprint, deviceName } = request.body as any;
+      const { licenseKey: rawKey, deviceFingerprint, deviceName } = request.body as any;
+      const licenseKey = rawKey.trim().toUpperCase();
 
       if (!LICENSE_KEY_REGEX.test(licenseKey)) {
         return reply.send({ valid: false, message: 'Invalid license key format.' });
@@ -80,7 +81,8 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { licenseKey, deviceFingerprint } = request.body as any;
+      const { licenseKey: rawKey, deviceFingerprint } = request.body as any;
+      const licenseKey = rawKey.trim().toUpperCase();
 
       if (!LICENSE_KEY_REGEX.test(licenseKey)) {
         return reply.send({ valid: false, message: 'Invalid license key format.' });
@@ -109,7 +111,8 @@ const licensesRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { licenseKey, deviceFingerprint } = request.body as any;
+      const { licenseKey: rawKey, deviceFingerprint } = request.body as any;
+      const licenseKey = rawKey.trim().toUpperCase();
 
       if (!LICENSE_KEY_REGEX.test(licenseKey)) {
         return reply.send({ success: false, message: 'Invalid license key format.' });
