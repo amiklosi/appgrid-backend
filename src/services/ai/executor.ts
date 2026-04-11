@@ -164,7 +164,7 @@ RULES:
 2. For each match, record a move to the target page.
 3. Apps already on the target page: include them anyway (no-op moves are fine).
 4. Apps NOT matching: do not include.
-5. Set success=false if the instruction can't be fully carried out.
+5. Always set success=true and include ALL matching apps. Do not worry about page capacity — the client handles overflow.
 
 RESPONSE — JSON only:
 {"moves":[{"id":X,"name":"...","to_page":N}],
@@ -203,8 +203,7 @@ export async function executeMoveToPage(
   const userMsg =
     `Grid:\n${gridRepr}\n\n` +
     (currentPage !== undefined ? `User is currently on page ${currentPage}.\n` : '') +
-    `Instruction: Move ${ca.filter ?? 'matching apps'} to page ${ca.targetPage}.\n` +
-    `Max ${maxItemsPerPage} apps per page.`;
+    `Instruction: Move ${ca.filter ?? 'matching apps'} to page ${ca.targetPage}.`;
 
   const messages = [
     { role: 'system' as const, content: MOVE_TO_PAGE_PROMPT },
