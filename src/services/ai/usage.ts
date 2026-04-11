@@ -27,10 +27,15 @@ export type UsageCheckResult =
 // and increments counters atomically if allowed.
 // ---------------------------------------------------------------------------
 
+const UNLIMITED_LICENSE_KEYS = ['DEBUG-PRO-KEY'];
+
 export async function checkAndIncrementUsage(
   licenseKey: string,
   machineId: string
 ): Promise<UsageCheckResult> {
+  if (UNLIMITED_LICENSE_KEYS.includes(licenseKey)) {
+    return { allowed: true };
+  }
   // Wrap in a transaction so the read-then-write is atomic — prevents two
   // concurrent requests both passing the limit check before either increments.
   return prisma.$transaction(async (tx) => {
