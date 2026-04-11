@@ -95,6 +95,18 @@ export type AnyMutations =
   | UngroupMutations;
 
 // ---------------------------------------------------------------------------
+// Compound step result (one step within a multi-action instruction)
+// ---------------------------------------------------------------------------
+
+export interface StepResult {
+  action: string;
+  success: boolean;
+  confidence: number;
+  reason: string | null;
+  mutations: AnyMutations | null;
+}
+
+// ---------------------------------------------------------------------------
 // Response
 // ---------------------------------------------------------------------------
 
@@ -105,6 +117,7 @@ export const RearrangeResponseSchema = Type.Object({
   confidence: Type.Number(),
   reason: Type.String(),
   mutations: Type.Optional(Type.Any()),
+  steps: Type.Optional(Type.Array(Type.Any())),
 });
 
 export type RearrangeResponse = Static<typeof RearrangeResponseSchema>;

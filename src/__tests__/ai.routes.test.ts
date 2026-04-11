@@ -15,10 +15,11 @@ import { prismaMock } from './setup';
 vi.mock('../lib/openai', () => ({ openai: {} }));
 
 // ---------------------------------------------------------------------------
-// Mock classifier and executor modules
+// Mock classifier, executor, and decomposer modules
 // ---------------------------------------------------------------------------
 vi.mock('../services/ai/classifier');
 vi.mock('../services/ai/executor');
+vi.mock('../services/ai/decomposer');
 
 import { classify } from '../services/ai/classifier';
 import {
@@ -30,6 +31,7 @@ import {
   executeUngroup,
   executeRemove,
 } from '../services/ai/executor';
+import { decompose } from '../services/ai/decomposer';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -123,6 +125,13 @@ describe('POST /api/ai/rearrange', () => {
       license: { isTrial: false },
     } as any);
     prismaMock.deviceActivation.update.mockResolvedValue({} as any);
+
+    // Default: decomposer returns the instruction unchanged (single-action path)
+    vi.mocked(decompose).mockImplementation(async (instruction: string) => ({
+      instructions: [instruction],
+      inputTokens: 0,
+      outputTokens: 0,
+    }));
 
     app = await buildApp();
     await app.ready();
@@ -627,7 +636,7 @@ describe('POST /api/ai/rearrange', () => {
   // -------------------------------------------------------------------------
 
   describe('classifier error handling', () => {
-    it('returns 502 when classifier throws', async () => {
+    it('returns success=false when classifier throws', async () => {
       vi.mocked(classify).mockRejectedValue(new Error('OpenAI timeout'));
 
       const res = await app.inject({
@@ -635,7 +644,9 @@ describe('POST /api/ai/rearrange', () => {
         url: '/api/ai/rearrange',
         payload: BASE_REQUEST,
       });
-      expect(res.statusCode).toBe(502);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(false);
+      expect(res.json().reason).toMatch(/Classification failed/);
     });
   });
 
@@ -644,7 +655,7 @@ describe('POST /api/ai/rearrange', () => {
   // -------------------------------------------------------------------------
 
   describe('executor error handling', () => {
-    it('returns 502 when executor throws', async () => {
+    it('returns success=false when executor throws', async () => {
       mockClassify({ action: 'create_group' });
       vi.mocked(executeGroup).mockRejectedValue(new Error('OpenAI rate limit'));
 
@@ -653,7 +664,199 @@ describe('POST /api/ai/rearrange', () => {
         url: '/api/ai/rearrange',
         payload: BASE_REQUEST,
       });
-      expect(res.statusCode).toBe(502);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(false);
+      expect(res.json().reason).toMatch(/Execution failed/);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Compound instructions
+  // -------------------------------------------------------------------------
+
+  describe('compound instructions', () => {
+    it('executes multiple steps when decomposer returns >1 sub-instructions', async () => {
+      vi.mocked(decompose).mockResolvedValue({
+        instructions: ['group browsers', 'group text editors'],
+        inputTokens: 10,
+        outputTokens: 5,
+      });
+
+      // First call: browsers, second call: text editors
+      vi.mocked(classify)
+        .mockResolvedValueOnce({
+          action: 'create_group',
+          confidence: 0.97,
+          filter: 'browsers',
+          filterType: 'semantic',
+          targetPage: 1,
+          sourcePage: null,
+          groupName: 'Browsers',
+          newName: null,
+          sortOrder: null,
+          reason: null,
+          rawPrompt: '[]',
+          rawResponse: '{}',
+        } as any)
+        .mockResolvedValueOnce({
+          action: 'create_group',
+          confidence: 0.93,
+          filter: 'text editors',
+          filterType: 'semantic',
+          targetPage: 1,
+          sourcePage: null,
+          groupName: 'Text Editors',
+          newName: null,
+          sortOrder: null,
+          reason: null,
+          rawPrompt: '[]',
+          rawResponse: '{}',
+        } as any);
+
+      vi.mocked(executeGroup)
+        .mockResolvedValueOnce({
+          success: true,
+          confidence: 0.97,
+          reason: '',
+          mutations: { groupName: 'Browsers', appIds: [1], targetPage: 1 },
+          inputTokens: 50,
+          outputTokens: 10,
+          costUsd: 0.0001,
+          executorModel: 'gpt-4.1',
+          rawPrompt: '[]',
+          rawResponse: '{}',
+        })
+        .mockResolvedValueOnce({
+          success: true,
+          confidence: 0.93,
+          reason: '',
+          mutations: { groupName: 'Text Editors', appIds: [3], targetPage: 1 },
+          inputTokens: 50,
+          outputTokens: 10,
+          costUsd: 0.0001,
+          executorModel: 'gpt-4.1',
+          rawPrompt: '[]',
+          rawResponse: '{}',
+        });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: { ...BASE_REQUEST, instruction: 'group browsers and text editors' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.action).toBe('compound');
+      expect(body.success).toBe(true);
+      expect(body.confidence).toBe(0.93); // min of 0.97 and 0.93
+      expect(body.mutations).toBeNull();
+      expect(body.steps).toHaveLength(2);
+      expect(body.steps[0].action).toBe('create_group');
+      expect(body.steps[0].mutations.groupName).toBe('Browsers');
+      expect(body.steps[1].action).toBe('create_group');
+      expect(body.steps[1].mutations.groupName).toBe('Text Editors');
+    });
+
+    it('fails entire compound if any step classifies as unknown', async () => {
+      vi.mocked(decompose).mockResolvedValue({
+        instructions: ['group browsers', 'make it pretty'],
+        inputTokens: 10,
+        outputTokens: 5,
+      });
+
+      vi.mocked(classify)
+        .mockResolvedValueOnce({
+          action: 'create_group',
+          confidence: 0.97,
+          filter: 'browsers',
+          filterType: 'semantic',
+          targetPage: 1,
+          sourcePage: null,
+          groupName: 'Browsers',
+          newName: null,
+          sortOrder: null,
+          reason: null,
+          rawPrompt: '[]',
+          rawResponse: '{}',
+        } as any)
+        .mockResolvedValueOnce({
+          action: 'unknown',
+          confidence: 0.1,
+          filter: null,
+          filterType: null,
+          targetPage: null,
+          sourcePage: null,
+          groupName: null,
+          newName: null,
+          sortOrder: null,
+          reason: 'Too vague',
+          rawPrompt: '[]',
+          rawResponse: '{}',
+        } as any);
+
+      vi.mocked(executeGroup).mockResolvedValueOnce({
+        success: true,
+        confidence: 0.97,
+        reason: '',
+        mutations: { groupName: 'Browsers', appIds: [1], targetPage: 1 },
+        inputTokens: 50,
+        outputTokens: 10,
+        costUsd: 0.0001,
+        executorModel: 'gpt-4.1',
+        rawPrompt: '[]',
+        rawResponse: '{}',
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: { ...BASE_REQUEST, instruction: 'group browsers and make it pretty' },
+      });
+
+      const body = res.json();
+      expect(body.action).toBe('compound');
+      expect(body.success).toBe(false);
+      expect(body.reason).toMatch(/make it pretty/);
+      expect(body.steps).toHaveLength(1); // first step completed before failure
+    });
+
+    it('single instruction still works when decomposer returns 1 element', async () => {
+      vi.mocked(decompose).mockResolvedValue({
+        instructions: ['group browsers'],
+        inputTokens: 10,
+        outputTokens: 5,
+      });
+      mockClassify();
+      mockExecuteGroup();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
+
+      const body = res.json();
+      expect(body.action).toBe('create_group'); // NOT "compound"
+      expect(body.success).toBe(true);
+      expect(body.mutations).toBeTruthy();
+      expect(body.steps).toBeUndefined();
+    });
+
+    it('falls back to single instruction if decomposer throws', async () => {
+      vi.mocked(decompose).mockRejectedValue(new Error('LLM down'));
+      mockClassify();
+      mockExecuteGroup();
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/ai/rearrange',
+        payload: BASE_REQUEST,
+      });
+
+      const body = res.json();
+      expect(body.action).toBe('create_group');
+      expect(body.success).toBe(true);
     });
   });
 

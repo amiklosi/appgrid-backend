@@ -1,7 +1,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import { openai } from '../lib/openai';
 import { prisma } from '../lib/prisma';
-import { classify } from '../services/ai/classifier';
+import { classify, ClassifiedAction } from '../services/ai/classifier';
 import { checkAndIncrementUsage } from '../services/ai/usage';
 import {
   executeMoveToPage,
@@ -11,8 +11,15 @@ import {
   executeRenameGroup,
   executeUngroup,
   executeRemove,
+  ExecutorResult,
 } from '../services/ai/executor';
-import { RearrangeRequestSchema, OutcomeRequestSchema, VALID_OUTCOMES } from '../schemas/ai.schema';
+import { decompose } from '../services/ai/decomposer';
+import {
+  RearrangeRequestSchema,
+  OutcomeRequestSchema,
+  VALID_OUTCOMES,
+  StepResult,
+} from '../schemas/ai.schema';
 
 const aiRoutes: FastifyPluginAsync = async (fastify) => {
   // ---------------------------------------------------------------------------
@@ -146,207 +153,302 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // ---------------------------------------------------------------------------
-      // 1. Classify intent
+      // Helper: classify → validate → execute a single sub-instruction
       // ---------------------------------------------------------------------------
-      let classified;
-      try {
-        classified = await classify(instruction, openai, {
-          pageCount: grid.pages.length,
-          currentPage,
-        });
-      } catch (err) {
-        request.log.error({ err, instruction }, 'ai classify error');
-        return reply.status(502).send({ error: 'Classification failed', detail: String(err) });
-      }
-
-      request.log.info(
-        {
-          action: classified.action,
-          confidence: classified.confidence,
-          filter: classified.filter,
-          filterType: classified.filterType,
-          targetPage: classified.targetPage,
-          sourcePage: classified.sourcePage,
-          groupName: classified.groupName,
-          instruction,
-        },
-        'ai classify'
-      );
-
-      // ---------------------------------------------------------------------------
-      // 2. Unknown / unsupported instruction — return early
-      // ---------------------------------------------------------------------------
-      if (classified.action === 'unknown') {
-        const id = await persistRequest({
-          action: 'unknown',
-          confidence: classified.confidence,
-          reason: classified.reason,
-          success: false,
-          mutations: null,
-          classifierPrompt: classified.rawPrompt,
-          classifierResponse: classified.rawResponse,
-          executorModel: null,
-          executorPrompt: null,
-          executorResponse: null,
-          inputTokens: 0,
-          outputTokens: 0,
-          costUsd: 0,
-          outcome: 'not_applicable',
-        });
-        return reply.send({
-          id,
-          action: 'unknown',
-          success: false,
-          confidence: classified.confidence,
-          reason: classified.reason ?? 'Instruction not understood',
-          mutations: null,
-        });
-      }
-
-      // ---------------------------------------------------------------------------
-      // 3. Validate classifier output
-      // ---------------------------------------------------------------------------
-      const pageCount = grid.pages.length;
-      const maxPageNum =
-        grid.pages.length > 0 ? Math.max(...grid.pages.map((p: { page: number }) => p.page)) : 0;
-
-      const targetPageInvalid =
-        classified.targetPage !== null &&
-        (classified.targetPage < 1 || classified.targetPage > maxPageNum + 1);
-
-      const sourcePageInvalid =
-        classified.sourcePage !== null &&
-        (classified.sourcePage < 1 || classified.sourcePage > maxPageNum);
-
-      if (targetPageInvalid || sourcePageInvalid) {
-        const badPage = targetPageInvalid ? classified.targetPage : classified.sourcePage;
-        const reason = `Page ${badPage} is out of range. The grid has ${pageCount} page(s).`;
-        const id = await persistRequest({
-          action: classified.action,
-          confidence: classified.confidence,
-          reason,
-          success: false,
-          mutations: null,
-          classifierPrompt: classified.rawPrompt,
-          classifierResponse: classified.rawResponse,
-          executorModel: null,
-          executorPrompt: null,
-          executorResponse: null,
-          inputTokens: 0,
-          outputTokens: 0,
-          costUsd: 0,
-          outcome: 'not_applicable',
-        });
-        return reply.send({
-          id,
-          action: classified.action,
-          success: false,
-          confidence: classified.confidence,
-          reason,
-          mutations: null,
-        });
-      }
-
-      // ---------------------------------------------------------------------------
-      // 4. Route to executor
-      // ---------------------------------------------------------------------------
-
-      // Auto-select executor model based on filter complexity (mirrors pipeline.py)
-      const executorModel = classified.filterType === 'semantic' ? 'gpt-4.1' : 'gpt-4.1-mini';
-
-      let result;
-      try {
-        switch (classified.action) {
-          case 'move_to_page':
-            result = await executeMoveToPage(
-              classified,
-              grid,
-              openai,
-              executorModel,
-              maxItemsPerPage,
-              currentPage
-            );
-            break;
-
-          case 'create_group':
-          case 'move_to_group':
-            result = await executeGroup(classified, grid, openai, executorModel, currentPage);
-            break;
-
-          case 'sort_page':
-            result = await executeSortPage(classified, grid, openai, executorModel);
-            break;
-
-          case 'rename_page':
-            result = executeRenamePage(classified, grid);
-            break;
-
-          case 'rename_group':
-            result = executeRenameGroup(classified, grid);
-            break;
-
-          case 'ungroup':
-            result = executeUngroup(classified, grid);
-            break;
-
-          case 'remove':
-            result = await executeRemove(classified, grid, openai, executorModel);
-            break;
-
-          default:
-            return reply.send({
-              id: 'unhandled',
-              action: classified.action,
-              success: false,
-              confidence: 0,
-              reason: 'Unhandled action type',
-              mutations: null,
-            });
+      async function classifyAndExecute(
+        subInstruction: string
+      ): Promise<
+        | { ok: true; classified: ClassifiedAction; result: ExecutorResult }
+        | { ok: false; classified: ClassifiedAction | null; reason: string }
+      > {
+        let classified: ClassifiedAction;
+        try {
+          classified = await classify(subInstruction, openai, {
+            pageCount: grid.pages.length,
+            currentPage,
+          });
+        } catch (err) {
+          return { ok: false, classified: null, reason: `Classification failed: ${err}` };
         }
-      } catch (err) {
-        request.log.error({ err, action: classified.action, instruction }, 'ai executor error');
-        return reply.status(502).send({ error: 'Execution failed', detail: String(err) });
+
+        if (classified.action === 'unknown') {
+          return {
+            ok: false,
+            classified,
+            reason: classified.reason ?? 'Instruction not understood',
+          };
+        }
+
+        // Validate page numbers
+        const maxPageNum =
+          grid.pages.length > 0 ? Math.max(...grid.pages.map((p: { page: number }) => p.page)) : 0;
+        const targetPageInvalid =
+          classified.targetPage !== null &&
+          (classified.targetPage < 1 || classified.targetPage > maxPageNum + 1);
+        const sourcePageInvalid =
+          classified.sourcePage !== null &&
+          (classified.sourcePage < 1 || classified.sourcePage > maxPageNum);
+        if (targetPageInvalid || sourcePageInvalid) {
+          const badPage = targetPageInvalid ? classified.targetPage : classified.sourcePage;
+          return {
+            ok: false,
+            classified,
+            reason: `Page ${badPage} is out of range. The grid has ${grid.pages.length} page(s).`,
+          };
+        }
+
+        // Execute
+        const executorModel = classified.filterType === 'semantic' ? 'gpt-4.1' : 'gpt-4.1-mini';
+        let result: ExecutorResult;
+        try {
+          switch (classified.action) {
+            case 'move_to_page':
+              result = await executeMoveToPage(
+                classified,
+                grid,
+                openai,
+                executorModel,
+                maxItemsPerPage,
+                currentPage
+              );
+              break;
+            case 'create_group':
+            case 'move_to_group':
+              result = await executeGroup(classified, grid, openai, executorModel, currentPage);
+              break;
+            case 'sort_page':
+              result = await executeSortPage(classified, grid, openai, executorModel);
+              break;
+            case 'rename_page':
+              result = executeRenamePage(classified, grid);
+              break;
+            case 'rename_group':
+              result = executeRenameGroup(classified, grid);
+              break;
+            case 'ungroup':
+              result = executeUngroup(classified, grid);
+              break;
+            case 'remove':
+              result = await executeRemove(classified, grid, openai, executorModel);
+              break;
+            default:
+              return { ok: false, classified, reason: 'Unhandled action type' };
+          }
+        } catch (err) {
+          return { ok: false, classified, reason: `Execution failed: ${err}` };
+        }
+
+        return { ok: true, classified, result };
       }
 
-      request.log.info(
-        {
+      // ---------------------------------------------------------------------------
+      // 1. Decompose instruction into sub-instructions
+      // ---------------------------------------------------------------------------
+      let subInstructions: string[];
+      let decomposerTokens = { inputTokens: 0, outputTokens: 0 };
+      try {
+        const decomposed = await decompose(instruction, openai);
+        subInstructions = decomposed.instructions;
+        decomposerTokens = {
+          inputTokens: decomposed.inputTokens,
+          outputTokens: decomposed.outputTokens,
+        };
+      } catch (err) {
+        request.log.error({ err, instruction }, 'ai decompose error');
+        // Fall back to treating the whole instruction as a single action
+        subInstructions = [instruction];
+      }
+
+      request.log.info({ subInstructions, count: subInstructions.length }, 'ai decompose');
+
+      // ---------------------------------------------------------------------------
+      // 2. Single instruction — original path (no behavior change)
+      // ---------------------------------------------------------------------------
+      if (subInstructions.length === 1) {
+        const outcome = await classifyAndExecute(subInstructions[0]);
+
+        if (!outcome.ok) {
+          const classified = outcome.classified;
+          const id = await persistRequest({
+            action: classified?.action ?? 'unknown',
+            confidence: classified?.confidence ?? 0,
+            reason: outcome.reason,
+            success: false,
+            mutations: null,
+            classifierPrompt: classified?.rawPrompt ?? null,
+            classifierResponse: classified?.rawResponse ?? null,
+            executorModel: null,
+            executorPrompt: null,
+            executorResponse: null,
+            inputTokens: decomposerTokens.inputTokens,
+            outputTokens: decomposerTokens.outputTokens,
+            costUsd: 0,
+            outcome: 'not_applicable',
+          });
+          return reply.send({
+            id,
+            action: classified?.action ?? 'unknown',
+            success: false,
+            confidence: classified?.confidence ?? 0,
+            reason: outcome.reason,
+            mutations: null,
+          });
+        }
+
+        const { classified, result } = outcome;
+
+        request.log.info(
+          {
+            action: classified.action,
+            success: result.success,
+            inputTokens: result.inputTokens + decomposerTokens.inputTokens,
+            outputTokens: result.outputTokens + decomposerTokens.outputTokens,
+            costUsd: result.costUsd,
+          },
+          'ai execute'
+        );
+
+        const persistOutcome = result.success ? 'pending' : 'not_applicable';
+        const id = await persistRequest({
+          action: classified.action,
+          confidence: result.confidence,
+          reason: result.reason || null,
+          success: result.success,
+          mutations: result.mutations,
+          classifierPrompt: classified.rawPrompt,
+          classifierResponse: classified.rawResponse,
+          executorModel: result.executorModel,
+          executorPrompt: result.rawPrompt,
+          executorResponse: result.rawResponse,
+          inputTokens: result.inputTokens + decomposerTokens.inputTokens,
+          outputTokens: result.outputTokens + decomposerTokens.outputTokens,
+          costUsd: result.costUsd,
+          outcome: persistOutcome,
+        });
+
+        return reply.send({
+          id,
           action: classified.action,
           success: result.success,
-          inputTokens: result.inputTokens,
-          outputTokens: result.outputTokens,
-          costUsd: result.costUsd,
-        },
-        'ai execute'
-      );
+          confidence: result.confidence,
+          reason: result.reason,
+          mutations: result.mutations,
+        });
+      }
 
-      // Persist — for successful backend executions the outcome starts as "pending"
-      // (waiting for client to report accepted/undone/failed_to_apply).
-      // For backend failures, it's "not_applicable".
-      const outcome = result.success ? 'pending' : 'not_applicable';
+      // ---------------------------------------------------------------------------
+      // 3. Compound instruction — execute each sub-instruction sequentially
+      // ---------------------------------------------------------------------------
+      const steps: StepResult[] = [];
+      let totalInputTokens = decomposerTokens.inputTokens;
+      let totalOutputTokens = decomposerTokens.outputTokens;
+      let totalCost = 0;
+      let allClassifierPrompts: string[] = [];
+      let allClassifierResponses: string[] = [];
+      let allExecutorPrompts: string[] = [];
+      let allExecutorResponses: string[] = [];
+      let minConfidence = 1;
+
+      for (const sub of subInstructions) {
+        const outcome = await classifyAndExecute(sub);
+
+        if (!outcome.ok) {
+          // One step failed — fail the entire compound request
+          const reason = `Step "${sub}" failed: ${outcome.reason}`;
+          request.log.warn({ sub, reason }, 'ai compound step failed');
+
+          const id = await persistRequest({
+            action: 'compound',
+            confidence: 0,
+            reason,
+            success: false,
+            mutations: steps, // persist partial steps for debugging
+            classifierPrompt: allClassifierPrompts.join('\n---\n') || null,
+            classifierResponse: allClassifierResponses.join('\n---\n') || null,
+            executorModel: null,
+            executorPrompt: allExecutorPrompts.join('\n---\n') || null,
+            executorResponse: allExecutorResponses.join('\n---\n') || null,
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
+            costUsd: totalCost,
+            outcome: 'not_applicable',
+          });
+
+          return reply.send({
+            id,
+            action: 'compound',
+            success: false,
+            confidence: 0,
+            reason,
+            mutations: null,
+            steps,
+          });
+        }
+
+        const { classified, result } = outcome;
+
+        totalInputTokens += result.inputTokens;
+        totalOutputTokens += result.outputTokens;
+        totalCost += result.costUsd;
+        minConfidence = Math.min(minConfidence, result.confidence);
+        if (classified.rawPrompt) allClassifierPrompts.push(classified.rawPrompt);
+        if (classified.rawResponse) allClassifierResponses.push(classified.rawResponse);
+        if (result.rawPrompt) allExecutorPrompts.push(result.rawPrompt);
+        if (result.rawResponse) allExecutorResponses.push(result.rawResponse);
+
+        steps.push({
+          action: classified.action,
+          success: result.success,
+          confidence: result.confidence,
+          reason: result.reason || null,
+          mutations: result.mutations,
+        });
+
+        request.log.info(
+          { sub, action: classified.action, success: result.success },
+          'ai compound step'
+        );
+      }
+
+      const allSucceeded = steps.every((s) => s.success);
+      const persistOutcome = allSucceeded ? 'pending' : 'not_applicable';
+
       const id = await persistRequest({
-        action: classified.action,
-        confidence: result.confidence,
-        reason: result.reason || null,
-        success: result.success,
-        mutations: result.mutations,
-        classifierPrompt: classified.rawPrompt,
-        classifierResponse: classified.rawResponse,
-        executorModel: result.executorModel,
-        executorPrompt: result.rawPrompt,
-        executorResponse: result.rawResponse,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        costUsd: result.costUsd,
-        outcome,
+        action: 'compound',
+        confidence: minConfidence,
+        reason: null,
+        success: allSucceeded,
+        mutations: steps,
+        classifierPrompt: allClassifierPrompts.join('\n---\n') || null,
+        classifierResponse: allClassifierResponses.join('\n---\n') || null,
+        executorModel: null,
+        executorPrompt: allExecutorPrompts.join('\n---\n') || null,
+        executorResponse: allExecutorResponses.join('\n---\n') || null,
+        inputTokens: totalInputTokens,
+        outputTokens: totalOutputTokens,
+        costUsd: totalCost,
+        outcome: persistOutcome,
       });
+
+      request.log.info(
+        {
+          stepCount: steps.length,
+          allSucceeded,
+          totalInputTokens,
+          totalOutputTokens,
+          totalCost,
+        },
+        'ai compound complete'
+      );
 
       return reply.send({
         id,
-        action: classified.action,
-        success: result.success,
-        confidence: result.confidence,
-        reason: result.reason,
-        mutations: result.mutations,
+        action: 'compound',
+        success: allSucceeded,
+        confidence: minConfidence,
+        reason: null,
+        mutations: null,
+        steps,
       });
     }
   );

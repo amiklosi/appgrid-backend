@@ -95,8 +95,6 @@ You support EXACTLY these operations — nothing else:
                   NOTE: "ungroup"/"dissolve"/"expand" a named folder = ungroup action, not unknown.
 
 CLASSIFY AS unknown (action="unknown") IN ALL OF THESE CASES — no exceptions:
-  - The instruction asks for more than one of the above operations at once.
-    → reason: "Please give one instruction at a time."
   - The instruction is vague or open-ended with no specific target
     (e.g. "organise my grid", "make sensible groups", "clean up page 1", "make it look nice").
     → reason: "Too vague — please be specific, e.g. 'put browsers in a folder called Browsers'."
