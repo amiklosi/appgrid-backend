@@ -24,6 +24,51 @@ describe('License Routes', () => {
     }
   });
 
+  describe('POST /api/licenses/validate', () => {
+    const validKey = 'FA1F-40C2-BF5E-3CF1';
+
+    it('should accept a key with leading/trailing spaces', async () => {
+      prismaMock.license.findUnique.mockResolvedValue(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/licenses/validate',
+        headers: { 'content-type': 'application/json' },
+        payload: { licenseKey: `  ${validKey}  ` },
+      });
+
+      // Should not return format error — gets past validation to DB lookup
+      const body = JSON.parse(response.body);
+      expect(body.message).not.toBe('Invalid license key format.');
+    });
+
+    it('should accept a lowercase key', async () => {
+      prismaMock.license.findUnique.mockResolvedValue(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/licenses/validate',
+        headers: { 'content-type': 'application/json' },
+        payload: { licenseKey: validKey.toLowerCase() },
+      });
+
+      const body = JSON.parse(response.body);
+      expect(body.message).not.toBe('Invalid license key format.');
+    });
+
+    it('should reject a key with an invalid format after trimming', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/licenses/validate',
+        headers: { 'content-type': 'application/json' },
+        payload: { licenseKey: 'NOT-A-VALID-KEY-FORMAT' },
+      });
+
+      const body = JSON.parse(response.body);
+      expect(body.message).toBe('Invalid license key format.');
+    });
+  });
+
   describe('POST /api/licenses/trial', () => {
     const fingerprint = 'test-device-fingerprint-abc123';
     const deviceName = 'Test MacBook';
