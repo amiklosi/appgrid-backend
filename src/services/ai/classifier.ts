@@ -198,12 +198,14 @@ export async function classify(
   if (currentPage !== undefined) {
     contextLines.push(
       `The user is currently viewing page ${currentPage}. ` +
-        `When the instruction refers to 'this page', 'the current page', 'here', or similar:\n` +
-        `  - For move/group actions WITH a filter (e.g. "group dev tools on this page", ` +
-        `"move music apps on this page to page 3"): set source_page=${currentPage} ` +
-        `to restrict the candidate pool to this page. Also set target_page if a destination is stated.\n` +
-        `  - For sort/rename actions: set target_page=${currentPage}.\n` +
-        `  - For move/group ALL apps (no filter): set source_page=${currentPage}.`
+        `ONLY set source_page=${currentPage} when the instruction EXPLICITLY says ` +
+        `'this page', 'the current page', 'here', 'on this page', or similar. ` +
+        `If the instruction does NOT mention a specific page (e.g. just "group browsers"), ` +
+        `leave source_page=null so the operation applies to ALL pages.\n` +
+        `  - "group dev tools on this page" → source_page=${currentPage}\n` +
+        `  - "group dev tools" → source_page=null (search all pages)\n` +
+        `  - "sort this page" → target_page=${currentPage}\n` +
+        `  - "move apps on this page to page 3" → source_page=${currentPage}, target_page=3`
     );
   }
 
