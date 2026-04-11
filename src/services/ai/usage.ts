@@ -33,7 +33,7 @@ export async function checkAndIncrementUsage(
   licenseKey: string,
   machineId: string
 ): Promise<UsageCheckResult> {
-  if (UNLIMITED_LICENSE_KEYS.includes(licenseKey)) {
+  if (process.env.NODE_ENV === 'development' && UNLIMITED_LICENSE_KEYS.includes(licenseKey)) {
     return { allowed: true };
   }
   // Wrap in a transaction so the read-then-write is atomic — prevents two
