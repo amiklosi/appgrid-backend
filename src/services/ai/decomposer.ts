@@ -29,6 +29,8 @@ RULES:
 7. Do NOT split a single operation that mentions multiple apps/categories as its filter
    (e.g. "move Chrome and Firefox to page 2" is ONE operation, not two).
    Only split when there are genuinely different operations.
+8. Shared context (like "on this page", "on page 3", "from page 1") applies to ALL
+   sub-instructions. Repeat it in every sub-instruction so each is self-contained.
 
 RESPONSE — JSON only:
 {"instructions":["sub-instruction 1","sub-instruction 2"]}
@@ -36,6 +38,9 @@ RESPONSE — JSON only:
 EXAMPLES:
 "group browsers and text editors"
 → {"instructions":["group browsers","group text editors"]}
+
+"group browsers and text editors on this page"
+→ {"instructions":["group browsers on this page","group text editors on this page"]}
 
 "move Apple apps to page 1 and Microsoft apps to page 2"
 → {"instructions":["move Apple apps to page 1","move Microsoft apps to page 2"]}
