@@ -126,7 +126,7 @@ export type RearrangeResponse = Static<typeof RearrangeResponseSchema>;
 // Outcome endpoint
 // ---------------------------------------------------------------------------
 
-export const VALID_OUTCOMES = ['accepted', 'undone', 'failed_to_apply'] as const;
+export const VALID_OUTCOMES = ['accepted', 'undone', 'failed_to_apply', 'not_applicable'] as const;
 export type OutcomeValue = (typeof VALID_OUTCOMES)[number];
 
 export const OutcomeRequestSchema = Type.Object({

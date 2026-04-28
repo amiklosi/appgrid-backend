@@ -942,6 +942,31 @@ describe('POST /api/ai/rearrange', () => {
       expect(res.json().success).toBe(true);
     });
 
+    it('marks a pending request as not_applicable with a reason (no-op)', async () => {
+      mockPendingRecord();
+
+      const res = await app.inject({
+        method: 'PATCH',
+        url: `/api/ai/rearrange/${FAKE_ID}/outcome`,
+        payload: {
+          machineId: 'test-machine',
+          outcome: 'not_applicable',
+          reason: 'Apps already on page 2',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
+      expect(prismaMock.aiRequest.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            outcome: 'not_applicable',
+            outcomeReason: 'Apps already on page 2',
+          }),
+        })
+      );
+    });
+
     it('returns 404 for an unknown id', async () => {
       prismaMock.aiRequest.findUnique.mockResolvedValue(null);
 

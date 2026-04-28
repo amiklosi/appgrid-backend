@@ -502,7 +502,10 @@ const aiRoutes: FastifyPluginAsync = async (fastify) => {
           data: {
             outcome,
             outcomeAt: new Date(),
-            outcomeReason: outcome === 'failed_to_apply' ? (reason ?? null) : null,
+            outcomeReason:
+              outcome === 'failed_to_apply' || outcome === 'not_applicable'
+                ? (reason ?? null)
+                : null,
           },
         });
       } catch (err) {
